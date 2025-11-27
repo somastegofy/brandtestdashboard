@@ -1,5 +1,5 @@
 import React from 'react';
-import { HeadingTextProps } from './types';
+import { HeadingTextProps, HeadingAlignmentOption, BodyAlignmentOption } from './types';
 
 interface HeadingTextComponentProps {
   props: HeadingTextProps;
@@ -8,72 +8,91 @@ interface HeadingTextComponentProps {
   onClick?: () => void;
 }
 
+const SPACING_MAP: Record<NonNullable<HeadingTextProps['spacing']>, string> = {
+  compact: '0.5rem',
+  comfortable: '1rem',
+  relaxed: '1.5rem'
+};
+
 export const HeadingTextComponent: React.FC<HeadingTextComponentProps> = ({
   props,
   style = {},
-  isSelected = false,
   onClick
 }) => {
   const {
     heading = {
       text: 'Heading',
       level: 'h2',
-      fontSize: '2rem',
-      fontWeight: 'bold',
-      color: '#000000',
-      align: 'left'
+      fontWeight: '600',
+      align: 'left',
+      textTransform: 'none'
     },
     text = {
       content: 'Your text content goes here',
-      fontSize: '1rem',
-      color: '#333333',
+      fontWeight: '400',
       align: 'left'
     },
-    spacing = '16px',
+    spacing = 'comfortable',
     alignment = 'left'
   } = props;
 
   const HeadingTag = heading.level || 'h2';
+  const resolvedSpacing = SPACING_MAP[spacing] || SPACING_MAP.comfortable;
+  const containerAlignment = (alignment || 'left') as HeadingAlignmentOption;
+  const headingAlignment = (heading.align || containerAlignment) as HeadingAlignmentOption;
+  const bodyAlignment = (text.align || containerAlignment) as BodyAlignmentOption;
+  const headingWeight = heading.fontWeight || '600';
+  const bodyWeight = text.fontWeight || '400';
 
   const containerStyle: React.CSSProperties = {
-    textAlign: alignment,
+    textAlign: containerAlignment,
     ...style
   };
 
   const headingStyle: React.CSSProperties = {
-    fontSize: heading.fontSize || '2rem',
-    fontWeight: heading.fontWeight || 'bold',
-    color: heading.color || '#000000',
-    textAlign: heading.align || alignment,
-    fontFamily: heading.fontFamily || 'inherit',
-    letterSpacing: heading.letterSpacing || 'normal',
+    fontWeight: headingWeight,
+    textAlign: headingAlignment,
     textTransform: heading.textTransform || 'none',
-    lineHeight: heading.lineHeight || '1.2',
-    marginBottom: heading.marginBottom || spacing || '16px'
+    marginBottom: resolvedSpacing
   };
 
   const textStyle: React.CSSProperties = {
-    fontSize: text.fontSize || '1rem',
-    fontWeight: text.fontWeight || 'normal',
-    color: text.color || '#333333',
-    textAlign: text.align || alignment,
-    fontFamily: text.fontFamily || 'inherit',
-    lineHeight: text.lineHeight || '1.6',
-    marginTop: text.marginTop || '0'
+    fontWeight: bodyWeight,
+    textAlign: bodyAlignment,
+    marginTop: resolvedSpacing === '0' ? '0' : `calc(${resolvedSpacing} * 0.5)`
+  };
+
+  const renderBodyContent = () => {
+    if (!text.content) return null;
+    const paragraphs = text.content.split(/\n{2,}/).filter(Boolean);
+
+    if (paragraphs.length <= 1) {
+      return <p style={textStyle}>{text.content}</p>;
+    }
+
+    return (
+      <div className="space-y-3" style={{ textAlign: bodyAlignment }}>
+        {paragraphs.map((paragraph, index) => (
+          <p
+            key={index}
+            className="leading-relaxed"
+            style={{ fontWeight: bodyWeight, textAlign: bodyAlignment, margin: 0 }}
+          >
+            {paragraph}
+          </p>
+        ))}
+      </div>
+    );
   };
 
   return (
-    <div style={containerStyle}>
+    <div style={containerStyle} onClick={onClick} className="space-y-2">
       {heading.text && (
-        <HeadingTag style={headingStyle}>
+        <HeadingTag style={headingStyle} className="leading-tight tracking-tight text-balance">
           {heading.text}
         </HeadingTag>
       )}
-      {text.content && (
-        <p style={textStyle}>
-          {text.content}
-        </p>
-      )}
+      {renderBodyContent()}
       {(!heading.text && !text.content) && (
         <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 text-sm">
           No content. Add heading and text in settings.
@@ -88,27 +107,16 @@ export const getHeadingTextDefaultProps = (): HeadingTextProps => ({
   heading: {
     text: 'Your Heading',
     level: 'h2',
-    fontSize: '2rem',
-    fontWeight: 'bold',
-    color: '#000000',
+    fontWeight: '600',
     align: 'left',
-    fontFamily: '',
-    letterSpacing: 'normal',
-    textTransform: 'none',
-    lineHeight: '1.2',
-    marginBottom: '16px'
+    textTransform: 'none'
   },
   text: {
     content: 'Your text content goes here. You can add multiple paragraphs or format your text as needed.',
-    fontSize: '1rem',
-    fontWeight: 'normal',
-    color: '#333333',
-    align: 'left',
-    fontFamily: '',
-    lineHeight: '1.6',
-    marginTop: '0'
+    fontWeight: '400',
+    align: 'left'
   },
-  spacing: '16px',
+  spacing: 'comfortable',
   alignment: 'left'
 });
 

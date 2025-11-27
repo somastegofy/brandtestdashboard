@@ -38,10 +38,26 @@ export const ComponentWrapper: React.FC<ComponentWrapperProps> = ({
   dragActive = false,
   showDragHandle = false,
 }) => {
+  // Merge style with CSS variables support and ensure border radius works
+  const hasBorderRadius = style.borderRadius && 
+    style.borderRadius !== '0' && 
+    style.borderRadius !== '0px' && 
+    style.borderRadius !== 'none';
+  
+  const mergedStyle: React.CSSProperties = {
+    ...style,
+    // Ensure CSS variables are accessible
+    color: style.color || 'var(--text-color-primary, #111827)',
+    // Ensure border radius is visible by handling overflow when border radius is set
+    ...(hasBorderRadius && {
+      overflow: 'hidden',
+    }),
+  };
+
   return (
     <div
-      className={`relative transition-all cursor-pointer ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2' : dragActive ? 'ring-2 ring-dashed ring-blue-400 ring-offset-2 bg-blue-50/40' : 'hover:ring-1 hover:ring-gray-300'} ${className}`}
-      style={style}
+      className={`relative transition-all cursor-pointer component-wrapper ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2' : dragActive ? 'ring-2 ring-dashed ring-blue-400 ring-offset-2 bg-blue-50/40' : 'hover:ring-1 hover:ring-gray-300'} ${className}`}
+      style={mergedStyle}
       onClick={onClick}
       draggable={draggable}
       onDragStart={onDragStart}

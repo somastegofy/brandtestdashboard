@@ -20,10 +20,13 @@ export const ButtonsComponent: React.FC<ButtonsComponentProps> = ({
     buttons = [],
     layout = 'horizontal',
     alignment = 'left',
-    spacing = '12px',
+    spacing = '30px',
     size = 'medium',
     fullWidth = false
   } = props;
+
+  const CTA_DEFAULT = 'var(--cta-color-default, #10b981)';
+  const CTA_TEXT = 'var(--cta-text-color, #ffffff)';
 
   const sizeClasses = {
     small: 'px-3 py-1.5 text-sm',
@@ -32,80 +35,35 @@ export const ButtonsComponent: React.FC<ButtonsComponentProps> = ({
   };
 
   const getButtonStyle = (button: ButtonsProps['buttons'][0]) => {
+    const variant = button.style === 'outline' ? 'outline' : 'normal';
+    const isRounded = button.rounded !== false;
     const baseStyle: React.CSSProperties = {
-      borderRadius: button.borderRadius || '6px',
+      borderRadius: isRounded ? 'var(--cta-rounded-radius, 25px)' : '8px',
       fontWeight: button.fontWeight || '500',
-      letterSpacing: button.letterSpacing || 'normal',
-      textTransform: button.textTransform || 'none',
       transition: 'all 0.2s ease-in-out',
     };
-
-    // Apply style variant
-    switch (button.style) {
-      case 'primary':
-        return {
-          ...baseStyle,
-          backgroundColor: button.backgroundColor || '#3b82f6',
-          color: button.textColor || '#ffffff',
-          border: 'none',
-        };
-      case 'secondary':
-        return {
-          ...baseStyle,
-          backgroundColor: button.backgroundColor || '#6b7280',
-          color: button.textColor || '#ffffff',
-          border: 'none',
-        };
-      case 'outline':
-        return {
-          ...baseStyle,
-          backgroundColor: 'transparent',
-          color: button.textColor || button.backgroundColor || '#3b82f6',
-          border: `2px solid ${button.borderColor || button.backgroundColor || '#3b82f6'}`,
-        };
-      case 'text':
-        return {
-          ...baseStyle,
-          backgroundColor: 'transparent',
-          color: button.textColor || '#3b82f6',
-          border: 'none',
-        };
-      case 'custom':
-        return {
-          ...baseStyle,
-          backgroundColor: button.backgroundColor || '#3b82f6',
-          color: button.textColor || '#ffffff',
-          border: button.borderWidth && button.borderColor 
-            ? `${button.borderWidth} solid ${button.borderColor}` 
-            : 'none',
-        };
-      default:
-        return {
-          ...baseStyle,
-          backgroundColor: button.backgroundColor || '#3b82f6',
-          color: button.textColor || '#ffffff',
-          border: 'none',
-        };
-    }
-  };
-
-  const getButtonHoverStyle = (button: ButtonsProps['buttons'][0]) => {
-    if (button.hoverBackgroundColor || button.hoverTextColor) {
+    if (variant === 'outline') {
       return {
-        ':hover': {
-          backgroundColor: button.hoverBackgroundColor || button.backgroundColor,
-          color: button.hoverTextColor || button.textColor,
-        }
+        ...baseStyle,
+        backgroundColor: 'transparent',
+        color: CTA_DEFAULT,
+        border: `2px solid ${CTA_DEFAULT}`,
       };
     }
-    return {};
+
+    return {
+      ...baseStyle,
+      backgroundColor: CTA_DEFAULT,
+      color: CTA_TEXT,
+      border: 'none',
+    };
   };
 
   const containerStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: layout === 'vertical' ? 'column' : 'row',
     flexWrap: layout === 'grid' ? 'wrap' : 'nowrap',
-    gap: spacing,
+    gap: spacing || '30px',
     justifyContent: alignment === 'left' ? 'flex-start' : 
                    alignment === 'center' ? 'center' : 
                    alignment === 'right' ? 'flex-end' : 
@@ -117,17 +75,19 @@ export const ButtonsComponent: React.FC<ButtonsComponentProps> = ({
   const buttonWrapperStyle: React.CSSProperties = {
     width: fullWidth ? '100%' : 'auto',
     display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
   };
 
   const renderButton = (button: ButtonsProps['buttons'][0], index: number) => {
+    const titleAlign = button.titleAlign || 'left';
+    const descriptionAlign = button.descriptionAlign || 'left';
     const buttonStyle = getButtonStyle(button);
     const buttonContent = (
       <button
         type={button.type === 'submit' ? 'submit' : 'button'}
         className={`${sizeClasses[size]} font-medium rounded transition-all ${
-          button.style === 'outline' ? 'hover:bg-opacity-10' : 
-          button.style === 'text' ? 'hover:bg-gray-100' : 
-          'hover:opacity-90'
+          button.style === 'outline' ? 'hover:bg-gray-50' : 'hover:opacity-90'
         }`}
         style={{
           ...buttonStyle,
@@ -146,7 +106,30 @@ export const ButtonsComponent: React.FC<ButtonsComponentProps> = ({
     );
 
     return (
-      <div key={index} style={buttonWrapperStyle}>
+      <div key={button.id || index} style={buttonWrapperStyle}>
+        {button.title && (
+          <div
+            className="text-sm text-gray-900"
+            style={{
+              fontWeight: button.titleFontWeight || '600',
+              textAlign: titleAlign
+            }}
+          >
+            {button.title}
+          </div>
+        )}
+        {button.description && (
+          <p
+            className="text-xs text-gray-600"
+            style={{
+              fontWeight: button.descriptionFontWeight || '400',
+              textAlign: descriptionAlign,
+              margin: 0
+            }}
+          >
+            {button.description}
+          </p>
+        )}
         {button.link ? (
           <a
             href={button.link}
@@ -187,28 +170,28 @@ export const ButtonsComponent: React.FC<ButtonsComponentProps> = ({
 export const getButtonsDefaultProps = (): ButtonsProps => ({
   buttons: [
     {
-      text: 'Click Me',
+      id: 'button-1',
+      title: '',
+      description: '',
+      text: 'Scan Me',
       link: '',
-      style: 'primary',
-      size: 'medium',
-      backgroundColor: '#3b82f6',
-      textColor: '#ffffff',
-      borderRadius: '6px',
+      style: 'normal',
+      rounded: true,
       fontWeight: '500',
       disabled: false,
       openInNewTab: false,
       type: 'button',
       icon: '',
       iconPosition: 'left',
-      hoverBackgroundColor: '',
-      hoverTextColor: '',
-      borderColor: '',
-      borderWidth: ''
+      titleAlign: 'left',
+      titleFontWeight: '600',
+      descriptionAlign: 'left',
+      descriptionFontWeight: '400',
     }
   ],
   layout: 'horizontal',
   alignment: 'left',
-  spacing: '12px',
+  spacing: '30px',
   size: 'medium',
   fullWidth: false
 });

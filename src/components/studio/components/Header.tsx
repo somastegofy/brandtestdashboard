@@ -1,5 +1,5 @@
 import React from 'react';
-import { HeaderProps } from './types';
+import { HeaderProps, HeaderAlignment } from './types';
 
 interface HeaderComponentProps {
   props: HeaderProps;
@@ -8,107 +8,54 @@ interface HeaderComponentProps {
   onClick?: () => void;
 }
 
+const DEFAULT_LOGO_PLACEHOLDER =
+  'https://images.placeholders.dev/?width=320&height=140&text=Your+Logo&fontSize=32';
+const LOGO_RATIO = 70;
+const TEXT_RATIO = 30;
+
 export const HeaderComponent: React.FC<HeaderComponentProps> = ({
   props,
   style = {},
-  isSelected = false,
   onClick
 }) => {
   const {
-    logo = { enabled: false, src: '', alt: '', width: 160, height: 48, align: 'left', link: '', openInNewTab: false },
-    text = { enabled: false, content: '', fontSize: '24px', fontWeight: 'bold', color: '#000000', align: 'left', link: '', openInNewTab: false, fontFamily: '', letterSpacing: 'normal', textTransform: 'none' },
-    navigation = { enabled: false, items: [], align: 'right' },
-    background = { color: '#ffffff', image: '', opacity: 1 },
+    logo = { enabled: true, src: '', alt: 'Brand logo', link: '', openInNewTab: false },
+    text = { enabled: true, content: '', fontWeight: '600', align: 'center', textTransform: 'none' },
     sticky = false,
     height = '80px',
-    padding = { top: '16px', bottom: '16px', left: '24px', right: '24px' },
-    border = { enabled: false, width: '1px', color: '#e5e7eb', style: 'solid' as const },
-    layout = { logoTextSpacing: '12px', logoTextAlignment: 'horizontal' }
+    layout = { logoTextArrangement: 'left_right' }
   } = props;
 
   const headerStyle: React.CSSProperties = {
     position: sticky ? 'sticky' : 'relative',
     top: sticky ? 0 : 'auto',
     zIndex: sticky ? 1000 : 'auto',
-    height: height,
-    paddingTop: padding.top,
-    paddingBottom: padding.bottom,
-    paddingLeft: padding.left,
-    paddingRight: padding.right,
-    backgroundColor: background.color || '#ffffff',
-    backgroundImage: background.image ? `url(${background.image})` : 'none',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-    opacity: background.opacity ?? 1,
-    borderBottom: border.enabled 
-      ? `${border.width} ${border.style} ${border.color}` 
-      : 'none',
+    minHeight: height || '80px',
     ...style
   };
 
-  const logoAlignClass = {
-    left: 'justify-start',
-    center: 'justify-center',
-    right: 'justify-end'
-  }[logo.align || 'left'];
+  const hasLogo = logo?.enabled !== false;
+  const hasText = text?.enabled !== false && Boolean(text?.content?.trim());
+  const arrangement = layout?.logoTextArrangement || 'left_right';
+  const isVerticalArrangement = arrangement === 'top_bottom' || arrangement === 'bottom_top';
+  const shouldReverseOrder = arrangement === 'right_left' || arrangement === 'bottom_top';
 
-  const navAlignClass = {
-    left: 'justify-start',
-    center: 'justify-center',
-    right: 'justify-end'
-  }[navigation.align || 'right'];
-
-  // Determine layout class for main header container
-  const getLayoutClass = () => {
-    const hasLogo = logo.enabled && logo.src;
-    const hasText = text.enabled && text.content;
-    const hasLeftContent = hasLogo || hasText;
-    const hasRightContent = navigation.enabled && navigation.items.length > 0;
-    
-    if (hasLeftContent && hasRightContent) {
-      return 'justify-between';
-    } else if (hasLeftContent) {
-      // If both logo and text are enabled, use their group alignment
-      if (hasLogo && hasText) {
-        // Group will handle its own alignment, header should space between if nav exists
-        return 'justify-start';
-      }
-      // Single element alignment
-      if (hasLogo) {
-        return logo.align === 'center' ? 'justify-center' : 
-               logo.align === 'right' ? 'justify-end' : 
-               'justify-start';
-      }
-      if (hasText) {
-        return text.align === 'center' ? 'justify-center' : 
-               text.align === 'right' ? 'justify-end' : 
-               'justify-start';
-      }
-    } else if (hasRightContent) {
-      return navAlignClass;
-    }
-    return 'justify-start';
-  };
-
-  // Determine if logo and text should be grouped together
-  const shouldGroupLogoAndText = (logo.enabled && logo.src) && (text.enabled && text.content);
-  const logoTextAlignment = layout?.logoTextAlignment || 'horizontal';
-
-  // Render Logo
   const renderLogo = () => {
-    if (!logo.enabled || !logo.src) return null;
+    if (!hasLogo) return null;
+
+    const finalSrc = logo.src?.trim() || DEFAULT_LOGO_PLACEHOLDER;
 
     const logoElement = (
       <img
-        src={logo.src}
-        alt={logo.alt}
-        width={logo.width}
-        height={logo.height}
-        className="object-contain"
-        style={{ maxHeight: height }}
+        src={finalSrc}
+        alt={logo.alt || 'Brand logo'}
+        className="object-contain max-h-24 w-full"
+        style={{
+          maxWidth: '100%',
+          height: 'auto'
+        }}
         onError={(e) => {
-          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/160x48?text=Logo';
+          (e.target as HTMLImageElement).src = DEFAULT_LOGO_PLACEHOLDER;
         }}
       />
     );
@@ -130,130 +77,87 @@ export const HeaderComponent: React.FC<HeaderComponentProps> = ({
     return logoElement;
   };
 
-  // Render Text
   const renderText = () => {
-    if (!text.enabled || !text.content) return null;
+    if (!hasText) return null;
 
     const textStyle: React.CSSProperties = {
-      fontSize: text.fontSize || '24px',
-      fontWeight: text.fontWeight || 'bold',
-      color: text.color || '#000000',
-      fontFamily: text.fontFamily || 'inherit',
-      letterSpacing: text.letterSpacing || 'normal',
+      fontWeight: text.fontWeight || '600',
       textTransform: text.textTransform || 'none',
       margin: 0,
       padding: 0,
+      textAlign: (text.align as HeaderAlignment) || 'center'
     };
 
-    const textElement = (
-      <span style={textStyle}>
-        {text.content}
-      </span>
+    return <span style={textStyle}>{text.content}</span>;
+  };
+
+  const buildSection = (kind: 'logo' | 'text') => {
+    const content = kind === 'logo' ? renderLogo() : renderText();
+    if (!content) return null;
+
+    const hasBoth = hasLogo && hasText;
+    const baseStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent:
+        kind === 'logo'
+          ? 'center'
+          : (text.align === 'right' && !isVerticalArrangement) ? 'flex-end'
+          : (text.align === 'left' && !isVerticalArrangement) ? 'flex-start'
+          : 'center',
+      textAlign: kind === 'text' ? (text.align as HeaderAlignment) || 'center' : 'center',
+      width: isVerticalArrangement ? '100%' : undefined
+    };
+
+    if (hasBoth) {
+      const ratioValue = kind === 'logo' ? `${LOGO_RATIO}%` : `${TEXT_RATIO}%`;
+      if (isVerticalArrangement) {
+        baseStyle.flexBasis = ratioValue;
+      } else {
+        baseStyle.flexBasis = ratioValue;
+        baseStyle.maxWidth = ratioValue;
+      }
+    } else {
+      baseStyle.flexBasis = '100%';
+      baseStyle.maxWidth = '100%';
+    }
+
+    return (
+      <div key={kind} style={baseStyle}>
+        {content}
+      </div>
     );
-
-    if (text.link) {
-      return (
-        <a
-          href={text.link}
-          target={text.openInNewTab ? '_blank' : '_self'}
-          rel={text.openInNewTab ? 'noopener noreferrer' : undefined}
-          onClick={(e) => e.stopPropagation()}
-          style={textStyle}
-          className="hover:opacity-80 transition-opacity"
-        >
-          {text.content}
-        </a>
-      );
-    }
-
-    return textElement;
   };
 
-  // Render Logo and Text Group
-  const renderLogoTextGroup = () => {
-    const hasLogo = logo.enabled && logo.src;
-    const hasText = text.enabled && text.content;
-    
-    if (!hasLogo && !hasText) {
+  const orderedSections = (() => {
+    const order: Array<'logo' | 'text'> = shouldReverseOrder ? ['text', 'logo'] : ['logo', 'text'];
+    const rendered = order.map((item) => buildSection(item)).filter(Boolean);
+
+    if (rendered.length === 0) {
       return (
-        <div className="w-full text-center text-gray-400 text-sm py-4">
-          Header - Configure logo or text in settings
+        <div className="w-full text-center text-gray-400 text-sm py-6">
+          Header - configure your logo or brand text
         </div>
       );
     }
 
-    // If both logo and text are enabled, group them together
-    if (shouldGroupLogoAndText) {
-      const spacing = layout?.logoTextSpacing || '12px';
-      const isVertical = logoTextAlignment === 'vertical';
-      
-      // Determine group alignment based on which element's alignment takes precedence
-      // Priority: logo alignment if both have same preference, otherwise left
-      const groupAlign = logo.align === text.align ? logo.align : 'left';
-      const groupAlignClass = groupAlign === 'center' ? 'mx-auto' : 
-                              groupAlign === 'right' ? 'ml-auto' : '';
-      
-      return (
-        <div className={`flex items-center ${isVertical ? 'flex-col' : 'flex-row'} ${groupAlignClass}`} style={{ gap: spacing }}>
-          {renderLogo()}
-          {renderText()}
-        </div>
-      );
-    }
-
-    // Render separately based on individual alignment
-    if (hasLogo && !hasText) {
-      const alignClass = logo.align === 'center' ? 'mx-auto' : 
-                        logo.align === 'right' ? 'ml-auto' : '';
-      return (
-        <div className={`flex items-center ${alignClass}`}>
-          {renderLogo()}
-        </div>
-      );
-    }
-
-    if (hasText && !hasLogo) {
-      const alignClass = text.align === 'center' ? 'mx-auto' : 
-                        text.align === 'right' ? 'ml-auto' : '';
-      return (
-        <div className={`flex items-center ${alignClass}`}>
-          {renderText()}
-        </div>
-      );
-    }
-
-    return null;
-  };
+    return rendered;
+  })();
 
   return (
     <header
-      className={`w-full flex items-center ${getLayoutClass()}`}
+      className="w-full flex items-center justify-center"
       style={headerStyle}
+      onClick={onClick}
     >
-      {/* Logo and/or Text Group */}
-      {renderLogoTextGroup()}
-
-      {/* Navigation */}
-      {navigation.enabled && navigation.items.length > 0 ? (
-        <nav className={`flex items-center gap-6 ${navAlignClass === 'justify-center' ? 'mx-auto' : ''}`}>
-          {navigation.items.map((item, index) => (
-            <a
-              key={index}
-              href={item.link}
-              target={item.openInNewTab ? '_blank' : '_self'}
-              rel={item.openInNewTab ? 'noopener noreferrer' : undefined}
-              className="text-gray-700 hover:text-gray-900 transition-colors font-medium"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-      ) : navigation.enabled && navigation.items.length === 0 ? (
-        <div className={`flex items-center px-4 py-2 bg-gray-100 rounded text-gray-500 text-sm ${navAlignClass === 'justify-center' ? 'mx-auto' : 'ml-auto'}`}>
-          Navigation (Add items in settings)
-        </div>
-      ) : null}
+      <div
+        className={`flex ${isVerticalArrangement ? 'flex-col' : 'flex-row items-center'} w-full`}
+        style={{
+          gap: isVerticalArrangement ? 'clamp(12px, 3vw, 36px)' : 'clamp(16px, 4vw, 64px)'
+        }}
+      >
+        {orderedSections}
+      </div>
     </header>
   );
 };
@@ -261,55 +165,23 @@ export const HeaderComponent: React.FC<HeaderComponentProps> = ({
 // Default props for Header component
 export const getHeaderDefaultProps = (): HeaderProps => ({
   logo: {
-    enabled: false,
-    src: '',
-    alt: 'Logo',
-    width: 160,
-    height: 48,
-    align: 'left',
+    enabled: true,
+    src: DEFAULT_LOGO_PLACEHOLDER,
+    alt: 'Brand logo',
     link: '',
     openInNewTab: false
   },
   text: {
     enabled: true,
     content: 'Header Title',
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#000000',
-    align: 'left',
-    link: '',
-    openInNewTab: false,
-    fontFamily: '',
-    letterSpacing: 'normal',
+    fontWeight: '600',
+    align: 'center',
     textTransform: 'none'
-  },
-  navigation: {
-    enabled: false,
-    items: [],
-    align: 'right'
-  },
-  background: {
-    color: '#ffffff',
-    image: '',
-    opacity: 1
   },
   sticky: false,
   height: '80px',
-  padding: {
-    top: '16px',
-    bottom: '16px',
-    left: '24px',
-    right: '24px'
-  },
-  border: {
-    enabled: true,
-    width: '1px',
-    color: '#e5e7eb',
-    style: 'solid'
-  },
   layout: {
-    logoTextSpacing: '12px',
-    logoTextAlignment: 'horizontal'
+    logoTextArrangement: 'left_right'
   }
 });
 

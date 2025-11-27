@@ -1,26 +1,77 @@
-import React from 'react';
-import { HeadingTextProps } from './types';
+import React, { useId } from 'react';
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight } from 'lucide-react';
+import { HeadingTextProps, HeadingTextSpacing } from './types';
 
 interface HeadingTextSettingsProps {
   props: HeadingTextProps;
   onPropsChange: (props: HeadingTextProps) => void;
 }
 
+const headingLevels: Array<{ value: HeadingTextProps['heading']['level']; label: string }> = [
+  { value: 'h1', label: 'H1' },
+  { value: 'h2', label: 'H2' },
+  { value: 'h3', label: 'H3' },
+  { value: 'h4', label: 'H4' },
+  { value: 'h5', label: 'H5' },
+  { value: 'h6', label: 'H6' }
+];
+
+const headingWeightOptions = [
+  { value: '400', label: 'Regular', short: 'Rg' },
+  { value: '500', label: 'Medium', short: 'Md' },
+  { value: '600', label: 'Semi', short: 'Sb' },
+  { value: '700', label: 'Bold', short: 'Bd' },
+  { value: '800', label: 'Extra', short: 'Ex' }
+];
+
+const bodyWeightOptions = [
+  { value: '400', label: 'Regular', short: 'Rg' },
+  { value: '500', label: 'Medium', short: 'Md' },
+  { value: '600', label: 'Semi', short: 'Sb' }
+];
+
+const alignmentOptions = [
+  { value: 'left', label: 'Left', icon: <AlignLeft className="w-4 h-4" /> },
+  { value: 'center', label: 'Center', icon: <AlignCenter className="w-4 h-4" /> },
+  { value: 'right', label: 'Right', icon: <AlignRight className="w-4 h-4" /> }
+];
+
+const bodyAlignmentOptions = [
+  ...alignmentOptions,
+  { value: 'justify', label: 'Justify', icon: <AlignJustify className="w-4 h-4" /> }
+];
+
+const textTransformOptions = [
+  { value: 'none', label: 'Aa' },
+  { value: 'uppercase', label: 'AA' },
+  { value: 'lowercase', label: 'aa' },
+  { value: 'capitalize', label: 'Aa+' }
+];
+
+const spacingOptions: Array<{ value: HeadingTextSpacing; label: string; helper: string }> = [
+  { value: 'compact', label: 'Compact', helper: 'Tighter gap' },
+  { value: 'comfortable', label: 'Comfort', helper: 'Balanced' },
+  { value: 'relaxed', label: 'Relaxed', helper: 'Roomy spacing' }
+];
+
 export const HeadingTextSettings: React.FC<HeadingTextSettingsProps> = ({
   props,
   onPropsChange
 }) => {
+  const headingInputId = useId();
+  const bodyInputId = useId();
+
   const updateProp = (path: string[], value: any) => {
     const newProps = { ...props };
     let current: any = newProps;
-    
+
     for (let i = 0; i < path.length - 1; i++) {
       if (!current[path[i]]) {
         current[path[i]] = {};
       }
       current = current[path[i]];
     }
-    
+
     current[path[path.length - 1]] = value;
     onPropsChange(newProps);
   };
@@ -30,12 +81,13 @@ export const HeadingTextSettings: React.FC<HeadingTextSettingsProps> = ({
       {/* Heading Settings */}
       <div>
         <h4 className="text-sm font-medium text-gray-900 mb-3">Heading</h4>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
+            <label htmlFor={headingInputId} className="block text-xs font-medium text-gray-700 mb-1">
               Heading Text
             </label>
             <input
+              id={headingInputId}
               type="text"
               value={props.heading?.text || ''}
               onChange={(e) => updateProp(['heading', 'text'], e.target.value)}
@@ -45,114 +97,103 @@ export const HeadingTextSettings: React.FC<HeadingTextSettingsProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Heading Level
-            </label>
-            <select
-              value={props.heading?.level || 'h2'}
-              onChange={(e) => updateProp(['heading', 'level'], e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="h1">H1</option>
-              <option value="h2">H2</option>
-              <option value="h3">H3</option>
-              <option value="h4">H4</option>
-              <option value="h5">H5</option>
-              <option value="h6">H6</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Font Size
-              </label>
-              <input
-                type="text"
-                value={props.heading?.fontSize || '2rem'}
-                onChange={(e) => updateProp(['heading', 'fontSize'], e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="2rem"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Font Weight
-              </label>
-              <select
-                value={props.heading?.fontWeight || 'bold'}
-                onChange={(e) => updateProp(['heading', 'fontWeight'], e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="normal">Normal</option>
-                <option value="bold">Bold</option>
-                <option value="600">Semibold</option>
-                <option value="700">Bold</option>
-                <option value="800">Extra Bold</option>
-              </select>
+            <p className="text-xs font-medium text-gray-700 mb-2">Heading Level</p>
+            <div className="grid grid-cols-6 gap-2">
+              {headingLevels.map((level) => {
+                const isActive = (props.heading?.level || 'h2') === level.value;
+                return (
+                  <button
+                    key={level.value}
+                    type="button"
+                    onClick={() => updateProp(['heading', 'level'], level.value)}
+                    className={`rounded-lg border px-2 py-1 text-xs font-semibold tracking-wide transition ${
+                      isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {level.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Text Color
-            </label>
-            <div className="flex items-center space-x-2">
-              <input
-                type="color"
-                value={props.heading?.color || '#000000'}
-                onChange={(e) => updateProp(['heading', 'color'], e.target.value)}
-                className="w-10 h-8 border border-gray-300 rounded cursor-pointer"
-              />
-              <input
-                type="text"
-                value={props.heading?.color || '#000000'}
-                onChange={(e) => updateProp(['heading', 'color'], e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
+            <p className="text-xs font-medium text-gray-700 mb-2">Font Weight</p>
+            <div className="grid grid-cols-5 gap-2">
+              {headingWeightOptions.map((option) => {
+                const isActive = (props.heading?.fontWeight || '600') === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateProp(['heading', 'fontWeight'], option.value)}
+                    className={`flex flex-col items-center justify-center rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
+                      isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold">{option.short}</span>
+                    <span className="uppercase tracking-wide text-[9px]">{option.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Alignment
-            </label>
-            <select
-              value={props.heading?.align || 'left'}
-              onChange={(e) => updateProp(['heading', 'align'], e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-            </select>
+            <p className="text-xs font-medium text-gray-700 mb-1">Alignment</p>
+            <div className="grid grid-cols-3 gap-2">
+              {alignmentOptions.map((option) => {
+                const isActive = (props.heading?.align || props.alignment || 'left') === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateProp(['heading', 'align'], option.value)}
+                    className={`flex flex-col items-center rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                      isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover-border-gray-300'
+                    }`}
+                  >
+                    {option.icon}
+                    <span className="mt-1">{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Margin Bottom
-            </label>
-            <input
-              type="text"
-              value={props.heading?.marginBottom || props.spacing || '16px'}
-              onChange={(e) => updateProp(['heading', 'marginBottom'], e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="16px"
-            />
+            <p className="text-xs font-medium text-gray-700 mb-1">Text Transform</p>
+            <div className="grid grid-cols-4 gap-2">
+              {textTransformOptions.map((option) => {
+                const isActive = (props.heading?.textTransform || 'none') === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateProp(['heading', 'textTransform'], option.value)}
+                    className={`flex items-center justify-center rounded-lg border px-2 py-2 text-sm font-semibold transition ${
+                      isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover-border-gray-300'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Text Settings */}
       <div>
-        <h4 className="text-sm font-medium text-gray-900 mb-3">Text</h4>
-        <div className="space-y-3">
+        <h4 className="text-sm font-medium text-gray-900 mb-3">Body Text</h4>
+        <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
+            <label htmlFor={bodyInputId} className="block text-xs font-medium text-gray-700 mb-1">
               Text Content
             </label>
             <textarea
+              id={bodyInputId}
               value={props.text?.content || ''}
               onChange={(e) => updateProp(['text', 'content'], e.target.value)}
               rows={4}
@@ -161,118 +202,98 @@ export const HeadingTextSettings: React.FC<HeadingTextSettingsProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Font Size
-              </label>
-              <input
-                type="text"
-                value={props.text?.fontSize || '1rem'}
-                onChange={(e) => updateProp(['text', 'fontSize'], e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="1rem"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Font Weight
-              </label>
-              <select
-                value={props.text?.fontWeight || 'normal'}
-                onChange={(e) => updateProp(['text', 'fontWeight'], e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="normal">Normal</option>
-                <option value="400">Regular</option>
-                <option value="500">Medium</option>
-                <option value="600">Semibold</option>
-              </select>
+          <div>
+            <p className="text-xs font-medium text-gray-700 mb-1">Font Weight</p>
+            <div className="grid grid-cols-3 gap-2">
+              {bodyWeightOptions.map((option) => {
+                const isActive = (props.text?.fontWeight || '400') === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateProp(['text', 'fontWeight'], option.value)}
+                    className={`flex flex-col items-center justify-center rounded-lg border px-2 py-2 text-xs font-medium transition ${
+                      isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover-border-gray-300'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold">{option.short}</span>
+                    <span className="text-[10px] uppercase tracking-wide">{option.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Text Color
-            </label>
-            <div className="flex items-center space-x-2">
-              <input
-                type="color"
-                value={props.text?.color || '#333333'}
-                onChange={(e) => updateProp(['text', 'color'], e.target.value)}
-                className="w-10 h-8 border border-gray-300 rounded cursor-pointer"
-              />
-              <input
-                type="text"
-                value={props.text?.color || '#333333'}
-                onChange={(e) => updateProp(['text', 'color'], e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
+            <p className="text-xs font-medium text-gray-700 mb-1">Alignment</p>
+            <div className="grid grid-cols-4 gap-2">
+              {bodyAlignmentOptions.map((option) => {
+                const isActive = (props.text?.align || props.alignment || 'left') === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateProp(['text', 'align'], option.value)}
+                    className={`flex flex-col items-center rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                      isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover-border-gray-300'
+                    }`}
+                  >
+                    {option.icon}
+                    <span className="mt-1">{option.label}</span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Alignment
-            </label>
-            <select
-              value={props.text?.align || 'left'}
-              onChange={(e) => updateProp(['text', 'align'], e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-              <option value="justify">Justify</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Line Height
-            </label>
-            <input
-              type="text"
-              value={props.text?.lineHeight || '1.6'}
-              onChange={(e) => updateProp(['text', 'lineHeight'], e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="1.6"
-            />
           </div>
         </div>
       </div>
 
       {/* General Settings */}
       <div>
-        <h4 className="text-sm font-medium text-gray-900 mb-3">General</h4>
-        <div className="space-y-3">
+        <h4 className="text-sm font-medium text-gray-900 mb-3">Layout</h4>
+        <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Overall Alignment
-            </label>
-            <select
-              value={props.alignment || 'left'}
-              onChange={(e) => onPropsChange({ ...props, alignment: e.target.value as any })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-            </select>
+            <p className="text-xs font-medium text-gray-700 mb-1">Overall Alignment</p>
+            <div className="grid grid-cols-3 gap-2">
+              {alignmentOptions.map((option) => {
+                const isActive = (props.alignment || 'left') === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onPropsChange({ ...props, alignment: option.value as any })}
+                    className={`flex flex-col items-center rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                      isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover-border-gray-300'
+                    }`}
+                  >
+                    {option.icon}
+                    <span className="mt-1">{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Spacing Between Heading & Text
-            </label>
-            <input
-              type="text"
-              value={props.spacing || '16px'}
-              onChange={(e) => onPropsChange({ ...props, spacing: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="16px"
-            />
+            <p className="text-xs font-medium text-gray-700 mb-1">Spacing Between Heading & Text</p>
+            <div className="grid grid-cols-3 gap-2">
+              {spacingOptions.map((option) => {
+                const isActive = (props.spacing || 'comfortable') === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => onPropsChange({ ...props, spacing: option.value as HeadingTextSpacing })}
+                    className={`rounded-lg border px-3 py-2 text-xs transition ${
+                      isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover-border-gray-300'
+                    }`}
+                  >
+                    <span className="font-semibold">{option.label}</span>
+                    <span className="text-[10px] block">{option.helper}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

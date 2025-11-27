@@ -82,6 +82,41 @@ const PublishedPageViewer: React.FC = () => {
     loadPage();
   }, [slug]);
 
+  // Helper function to get border radius value
+  const getCardBorderRadius = (borderRadius: string, custom?: string): string => {
+    if (borderRadius === 'custom' && custom) {
+      return custom;
+    }
+    const radiusMap: Record<string, string> = {
+      'none': '0px',
+      'xs': '4px',
+      'sm': '8px',
+      'md': '12px',
+      'lg': '16px',
+      'xl': '24px',
+      '2xl': '32px',
+      'full': '9999px'
+    };
+    return radiusMap[borderRadius] || '12px';
+  };
+
+  // Helper function to get shadow/elevation CSS
+  const getCardElevation = (elevation: string, shadowColor?: string): string => {
+    if (!elevation || elevation === 'none') return 'none';
+    
+    const shadow = shadowColor || 'rgba(0, 0, 0, 0.1)';
+    const elevationMap: Record<string, string> = {
+      'none': 'none',
+      'sm': `0 1px 2px 0 ${shadow}`,
+      'md': `0 4px 6px -1px ${shadow}, 0 2px 4px -1px ${shadow}`,
+      'lg': `0 10px 15px -3px ${shadow}, 0 4px 6px -2px ${shadow}`,
+      'xl': `0 20px 25px -5px ${shadow}, 0 10px 10px -5px ${shadow}`,
+      '2xl': `0 25px 50px -12px ${shadow}`,
+      'inner': `inset 0 2px 4px 0 ${shadow}`
+    };
+    return elevationMap[elevation] || 'none';
+  };
+
   // Apply design customization styles
   const applyDesignCustomization = (customization: DesignCustomization): React.CSSProperties => {
     const styles: React.CSSProperties = {
@@ -120,13 +155,39 @@ const PublishedPageViewer: React.FC = () => {
   };
 
   // Render a component based on its type
-  const renderComponent = (component: PageContentBlock) => {
+  const renderComponent = (component: PageContentBlock, customization: DesignCustomization) => {
     if (!component || !component.type) {
       return null;
     }
 
-    // Apply component style
+    // Calculate global card styles
+    const cardBorderRadius = getCardBorderRadius(customization.cardBorderRadius || 'md', customization.cardBorderRadiusCustom);
+    const cardElevation = getCardElevation(customization.cardElevation || 'none', customization.cardShadowColor);
+    
+    // Determine final border radius - use component-specific if set, otherwise use global
+    const finalBorderRadius = component.style?.borderRadius && component.style.borderRadius !== '0' && component.style.borderRadius !== '0px'
+      ? component.style.borderRadius
+      : cardBorderRadius;
+    
+    // Apply global card styles first, then override with component-specific styles
     const componentStyle: React.CSSProperties = {
+      // Apply global card styles from design customization FIRST (base styles)
+      borderRadius: finalBorderRadius,
+      backgroundColor: customization.cardSurfaceColor || '#ffffff',
+      boxShadow: cardElevation !== 'none' ? cardElevation : undefined,
+      transition: `all ${customization.transitionDuration || '150ms'} ${customization.transitionEasing || 'ease-in-out'}`,
+      marginBottom: customization.componentGap || '24px',
+      // Apply borders if border width is set
+      ...(customization.cardBorderWidth && customization.cardBorderWidth !== '0' && {
+        borderWidth: customization.cardBorderWidth,
+        borderStyle: customization.cardBorderStyle || 'solid',
+        borderColor: customization.cardBorderColor || '#e5e7eb',
+      }),
+      // Ensure overflow hidden when border radius is present
+      ...(finalBorderRadius && finalBorderRadius !== '0' && finalBorderRadius !== '0px' && {
+        overflow: 'hidden',
+      }),
+      // Override with component-specific styles if they exist
       ...(component.style?.margin && {
         marginTop: component.style.margin.top,
         marginRight: component.style.margin.right,
@@ -140,17 +201,11 @@ const PublishedPageViewer: React.FC = () => {
         paddingLeft: component.style.padding.left,
       }),
       ...(component.style?.backgroundColor && { backgroundColor: component.style.backgroundColor }),
-      ...(component.style?.borderRadius && { borderRadius: component.style.borderRadius }),
       ...(component.style?.width && { width: component.style.width }),
       ...(component.style?.height && { height: component.style.height }),
       ...(component.style?.opacity !== undefined && { opacity: component.style.opacity }),
       ...(component.style?.textAlign && { textAlign: component.style.textAlign }),
     };
-
-    // Add border if specified
-    if (component.style?.borderWidth && component.style?.borderColor && component.style?.borderStyle) {
-      componentStyle.border = `${component.style.borderWidth} ${component.style.borderStyle || 'solid'} ${component.style.borderColor}`;
-    }
 
     switch (component.type) {
       case 'Header':
@@ -400,8 +455,8 @@ const PublishedPageViewer: React.FC = () => {
             <div className="p-4 md:p-8">
               <div className="w-full md:mx-auto md:bg-white md:shadow-lg md:min-h-full md:max-w-7xl">
                 {pageData.page_content && Array.isArray(pageData.page_content) && pageData.page_content.length > 0 ? (
-                  <div className="space-y-4 md:p-6">
-                    {pageData.page_content.map((component) => renderComponent(component))}
+                  <div className="md:p-6">
+                    {pageData.page_content.map((component) => renderComponent(component, pageData.design_customization))}
                   </div>
                 ) : (
                   <div className="max-w-7xl mx-auto px-4 py-12 text-center">
@@ -422,8 +477,8 @@ const PublishedPageViewer: React.FC = () => {
           <div className="p-4 md:p-8">
             <div className="w-full md:mx-auto md:bg-white md:shadow-lg md:min-h-full md:max-w-7xl">
               {pageData.page_content && Array.isArray(pageData.page_content) && pageData.page_content.length > 0 ? (
-                <div className="space-y-4 md:p-6">
-                  {pageData.page_content.map((component) => renderComponent(component))}
+                <div className="md:p-6">
+                  {pageData.page_content.map((component) => renderComponent(component, pageData.design_customization))}
                 </div>
               ) : (
                 <div className="max-w-7xl mx-auto px-4 py-12 text-center">
@@ -440,37 +495,75 @@ const PublishedPageViewer: React.FC = () => {
       {/* Apply global design customization CSS variables */}
       <style>{`
         :root {
+          /* Typography */
           --font-family-heading: ${pageData.design_customization.fontFamilyHeading || 'system-ui, sans-serif'};
           --font-family-body: ${pageData.design_customization.fontFamilyBody || 'system-ui, sans-serif'};
           --font-family-label: ${pageData.design_customization.fontFamilyLabel || 'system-ui, sans-serif'};
           --font-size-heading: ${pageData.design_customization.fontSizeHeading || '2rem'};
           --font-size-body: ${pageData.design_customization.fontSizeBody || '1rem'};
           --font-size-label: ${pageData.design_customization.fontSizeLabel || '0.875rem'};
+          
+          /* Colors */
+          --primary-color: ${pageData.design_customization.primaryColor || '#3b82f6'};
+          --secondary-color: ${pageData.design_customization.secondaryColor || '#8b5cf6'};
+          --accent-color: ${pageData.design_customization.accentColor || '#10b981'};
+          --text-color-primary: ${pageData.design_customization.textColorPrimary || '#111827'};
+          --text-color-secondary: ${pageData.design_customization.textColorSecondary || '#6b7280'};
+          --border-color-default: ${pageData.design_customization.borderColorDefault || '#e5e7eb'};
+          
+          /* Links */
           --link-color-default: ${pageData.design_customization.linkColorDefault || '#3b82f6'};
           --link-color-hover: ${pageData.design_customization.linkColorHover || '#2563eb'};
-          --link-color-active: ${pageData.design_customization.linkColorActive || '#1d4d8'};
+          --link-color-active: ${pageData.design_customization.linkColorActive || '#1d4ed8'};
+          
+          /* CTAs */
           --cta-color-default: ${pageData.design_customization.ctaColorDefault || '#10b981'};
           --cta-color-hover: ${pageData.design_customization.ctaColorHover || '#059669'};
           --cta-color-active: ${pageData.design_customization.ctaColorActive || '#047857'};
+          
+          /* Card Styles */
+          --card-border-radius: ${getCardBorderRadius(pageData.design_customization.cardBorderRadius || 'md', pageData.design_customization.cardBorderRadiusCustom)};
+          --card-elevation: ${getCardElevation(pageData.design_customization.cardElevation || 'none', pageData.design_customization.cardShadowColor)};
+          --card-shadow-color: ${pageData.design_customization.cardShadowColor || 'rgba(0, 0, 0, 0.1)'};
+          --card-surface-color: ${pageData.design_customization.cardSurfaceColor || '#ffffff'};
+          --card-border-width: ${pageData.design_customization.cardBorderWidth || '0'};
+          --card-border-color: ${pageData.design_customization.cardBorderColor || '#e5e7eb'};
+          --card-border-style: ${pageData.design_customization.cardBorderStyle || 'solid'};
+          
+          /* Spacing */
+          --global-spacing: ${pageData.design_customization.globalSpacing || '8px'};
+          --component-gap: ${pageData.design_customization.componentGap || '24px'};
+          --global-padding: ${pageData.design_customization.globalPadding || '16px'};
+          
+          /* Transitions */
+          --transition-duration: ${pageData.design_customization.transitionDuration || '150ms'};
+          --transition-easing: ${pageData.design_customization.transitionEasing || 'ease-in-out'};
+          --transition: all var(--transition-duration) var(--transition-easing);
         }
         
+        /* Typography */
         h1, h2, h3, h4, h5, h6 {
           font-family: var(--font-family-heading);
           font-size: var(--font-size-heading);
+          color: var(--text-color-primary);
         }
         
         body, p, span, div {
           font-family: var(--font-family-body);
           font-size: var(--font-size-body);
+          color: var(--text-color-primary);
         }
         
         label, small {
           font-family: var(--font-family-label);
           font-size: var(--font-size-label);
+          color: var(--text-color-secondary);
         }
         
+        /* Links */
         a {
           color: var(--link-color-default);
+          transition: color var(--transition-duration) var(--transition-easing);
         }
         
         a:hover {
@@ -481,8 +574,10 @@ const PublishedPageViewer: React.FC = () => {
           color: var(--link-color-active);
         }
         
+        /* CTAs */
         button.cta, .cta-button {
           background-color: var(--cta-color-default);
+          transition: background-color var(--transition-duration) var(--transition-easing);
         }
         
         button.cta:hover, .cta-button:hover {
@@ -491,6 +586,38 @@ const PublishedPageViewer: React.FC = () => {
         
         button.cta:active, .cta-button:active {
           background-color: var(--cta-color-active);
+        }
+        
+        /* Card Styles - Applied globally */
+        .card, [class*="card"], .component-card {
+          border-radius: var(--card-border-radius);
+          background-color: var(--card-surface-color);
+          border: var(--card-border-width) var(--card-border-style) var(--card-border-color);
+          box-shadow: var(--card-elevation);
+          transition: var(--transition);
+        }
+        
+        /* Global Spacing */
+        .component-wrapper {
+          margin-bottom: var(--component-gap);
+        }
+        
+        /* Text Colors - Applied to all text elements */
+        .component-wrapper, .component-wrapper * {
+          color: var(--text-color-primary);
+        }
+        
+        .component-wrapper p, .component-wrapper span, .component-wrapper div {
+          color: var(--text-color-primary);
+        }
+        
+        .component-wrapper label, .component-wrapper small {
+          color: var(--text-color-secondary);
+        }
+        
+        /* Interactive Elements */
+        button, a, input, select, textarea {
+          transition: var(--transition);
         }
       `}</style>
     </div>

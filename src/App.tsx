@@ -12,6 +12,7 @@ import BuyerSourceProofTab from './components/BuyerSourceProofTab';
 import ReviewsManagerTab from './components/ReviewsManagerTab';
 import SubmissionDetailsModal from './components/SubmissionDetailsModal';
 import PublishedPageViewer from './components/PublishedPageViewer';
+import QRScanRedirect from './components/QRScanRedirect';
 import SettingsTab from './components/SettingsTab';
 import QrCodeManagerTab from './components/QrCodeManagerTab';
 import SupportInboxTab from './components/SupportInboxTab';
@@ -437,6 +438,9 @@ function App() {
   return (
     <Router>
       <Routes>
+        {/* QR Scan Redirect Route */}
+        <Route path="/qr/:qrId" element={<QRScanRedirect />} />
+        
         {/* Published Page Route */}
         <Route path="/published-product/:slug" element={<PublishedPageViewer />} />
         

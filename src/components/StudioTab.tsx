@@ -179,8 +179,17 @@ const StudioTab: React.FC<StudioTabProps> = ({
     fontSizeBody: '1rem',
     fontSizeLabel: '0.875rem',
     cardBorderRadius: 'md',
-    cardElevation: 'raised',
+    cardElevation: 'md',
     cardSurfaceColor: '#ffffff',
+    cardShadowColor: '#000000',
+    cardBorderWidth: '0',
+    cardBorderColor: '#e5e7eb',
+    cardBorderStyle: 'solid',
+    globalSpacing: '8px',
+    componentGap: '24px',
+    globalPadding: '16px',
+    transitionDuration: '150ms',
+    transitionEasing: 'ease-in-out',
     loaderType: 'spinner',
     loaderAccentColor: '#3b82f6',
     linkColorDefault: '#3b82f6',
@@ -189,6 +198,12 @@ const StudioTab: React.FC<StudioTabProps> = ({
     ctaColorDefault: '#10b981',
     ctaColorHover: '#059669',
     ctaColorActive: '#047857',
+    primaryColor: '#3b82f6',
+    secondaryColor: '#8b5cf6',
+    accentColor: '#10b981',
+    textColorPrimary: '#111827',
+    textColorSecondary: '#6b7280',
+    borderColorDefault: '#e5e7eb',
   });
 
   // QR and Link management state
@@ -1532,8 +1547,30 @@ const StudioTab: React.FC<StudioTabProps> = ({
       deleteComponent(component.id);
     };
 
-    // Apply component style to wrapper
+    // Apply component style to wrapper with design customization
+    const cardBorderRadius = getCardBorderRadius(designCustomization.cardBorderRadius, designCustomization.cardBorderRadiusCustom);
+    const cardElevation = getCardElevation(designCustomization.cardElevation);
+    
+    // Determine final border radius - use component-specific if set, otherwise use global
+    const finalBorderRadius = component.style?.borderRadius && component.style.borderRadius !== '0' && component.style.borderRadius !== '0px'
+      ? component.style.borderRadius
+      : cardBorderRadius;
+    
+    // Build wrapper style - apply global card styles first, then override with component-specific styles
     const wrapperStyle: React.CSSProperties = {
+      // Apply global card styles from design customization FIRST (base styles)
+      borderRadius: finalBorderRadius,
+      backgroundColor: designCustomization.cardSurfaceColor || '#ffffff',
+      boxShadow: cardElevation !== 'none' ? cardElevation : undefined,
+      transition: `all ${designCustomization.transitionDuration || '150ms'} ${designCustomization.transitionEasing || 'ease-in-out'}`,
+      marginBottom: designCustomization.componentGap || '24px',
+      // Apply borders if border width is set
+      ...(designCustomization.cardBorderWidth && designCustomization.cardBorderWidth !== '0' && {
+        borderWidth: designCustomization.cardBorderWidth,
+        borderStyle: designCustomization.cardBorderStyle || 'solid',
+        borderColor: designCustomization.cardBorderColor || '#e5e7eb',
+      }),
+      // Override with component-specific styles if they exist (but not borderRadius, already handled above)
       ...(component.style?.margin && {
         marginTop: component.style.margin.top,
         marginRight: component.style.margin.right,
@@ -1547,7 +1584,6 @@ const StudioTab: React.FC<StudioTabProps> = ({
         paddingLeft: component.style.padding.left,
       }),
       ...(component.style?.backgroundColor && { backgroundColor: component.style.backgroundColor }),
-      ...(component.style?.borderRadius && { borderRadius: component.style.borderRadius }),
       ...(component.style?.width && { width: component.style.width }),
       ...(component.style?.height && { height: component.style.height }),
     };
@@ -1558,7 +1594,7 @@ const StudioTab: React.FC<StudioTabProps> = ({
       onClick: handleClick,
       onDelete: handleDelete,
       style: wrapperStyle,
-      className: 'mb-4',
+      className: '',
       draggable: true,
       showDragHandle: true,
       dragActive: dragOverComponentId === component.id,
@@ -2002,6 +2038,44 @@ const StudioTab: React.FC<StudioTabProps> = ({
     );
   }
 
+  // Helper function to get border radius value
+  const getCardBorderRadius = (borderRadius: string, custom?: string): string => {
+    if (borderRadius === 'custom' && custom) {
+      return custom;
+    }
+    const radiusMap: Record<string, string> = {
+      'none': '0px',
+      'xs': '4px',
+      'sm': '8px',
+      'md': '12px',
+      'lg': '16px',
+      'xl': '24px',
+      '2xl': '32px',
+      'full': '9999px'
+    };
+    return radiusMap[borderRadius] || '12px';
+  };
+
+  // Helper function to get shadow/elevation CSS
+  const getCardElevation = (elevation: string): string => {
+    if (!elevation || elevation === 'none') return 'none';
+    
+    const shadowColor = designCustomization.cardShadowColor || 'rgba(0, 0, 0, 0.1)';
+    const elevationMap: Record<string, string> = {
+      'none': 'none',
+      'sm': `0 1px 2px 0 ${shadowColor}`,
+      'md': `0 4px 6px -1px ${shadowColor}, 0 2px 4px -1px ${shadowColor}`,
+      'lg': `0 10px 15px -3px ${shadowColor}, 0 4px 6px -2px ${shadowColor}`,
+      'xl': `0 20px 25px -5px ${shadowColor}, 0 10px 10px -5px ${shadowColor}`,
+      '2xl': `0 25px 50px -12px ${shadowColor}`,
+      'inner': `inset 0 2px 4px 0 ${shadowColor}`,
+      // Legacy support
+      'raised': `0 4px 6px -1px ${shadowColor}, 0 2px 4px -1px ${shadowColor}`,
+      'overlay': `0 10px 15px -3px ${shadowColor}, 0 4px 6px -2px ${shadowColor}`
+    };
+    return elevationMap[elevation] || elevationMap['md'];
+  };
+
   // Apply design customization to canvas with direct styles
   const applyDesignCustomization = (customization: DesignCustomization): React.CSSProperties => {
     const styles: React.CSSProperties = {
@@ -2054,6 +2128,23 @@ const StudioTab: React.FC<StudioTabProps> = ({
     '--font-size-body': designCustomization.fontSizeBody,
     '--font-size-label': designCustomization.fontSizeLabel,
     '--card-surface': designCustomization.cardSurfaceColor,
+    '--card-border-radius': getCardBorderRadius(designCustomization.cardBorderRadius, designCustomization.cardBorderRadiusCustom),
+    '--card-elevation': getCardElevation(designCustomization.cardElevation),
+    '--card-border-width': designCustomization.cardBorderWidth || '0',
+    '--card-border-color': designCustomization.cardBorderColor || 'transparent',
+    '--card-border-style': designCustomization.cardBorderStyle || 'solid',
+    '--card-shadow-color': designCustomization.cardShadowColor || 'rgba(0, 0, 0, 0.1)',
+    '--component-gap': designCustomization.componentGap || '24px',
+    '--global-padding': designCustomization.globalPadding || '16px',
+    '--global-spacing': designCustomization.globalSpacing || '8px',
+    '--transition-duration': designCustomization.transitionDuration || '150ms',
+    '--transition-easing': designCustomization.transitionEasing || 'ease-in-out',
+    '--primary-color': designCustomization.primaryColor || '#3b82f6',
+    '--secondary-color': designCustomization.secondaryColor || '#8b5cf6',
+    '--accent-color': designCustomization.accentColor || '#10b981',
+    '--text-color-primary': designCustomization.textColorPrimary || '#111827',
+    '--text-color-secondary': designCustomization.textColorSecondary || '#6b7280',
+    '--border-color-default': designCustomization.borderColorDefault || '#e5e7eb',
     '--link-default': designCustomization.linkColorDefault,
     '--link-hover': designCustomization.linkColorHover,
     '--link-active': designCustomization.linkColorActive,
@@ -2396,7 +2487,8 @@ const StudioTab: React.FC<StudioTabProps> = ({
               WebkitOverflowScrolling: 'touch',
               touchAction: 'pan-y',
               isolation: 'isolate',
-              pointerEvents: 'auto'
+              pointerEvents: 'auto',
+              ...canvasCSSVars
             }}
             onWheel={(e) => {
               // Prevent ANY scroll propagation to parent elements
@@ -2437,10 +2529,10 @@ const StudioTab: React.FC<StudioTabProps> = ({
               e.stopPropagation();
             }}
           >
-            <div className="p-8">
+            <div className="p-8" style={canvasCSSVars}>
           {/* Check if we need overlay wrapper */}
           {designCustomization.backgroundImage && designCustomization.backgroundOverlay > 0 ? (
-            <div
+          <div
               className={`mx-auto min-h-full shadow-lg ${getDeviceWidth()}`}
               style={{
                 position: 'relative',
@@ -2565,37 +2657,73 @@ const StudioTab: React.FC<StudioTabProps> = ({
           {/* Apply global design customization CSS variables */}
           <style>{`
             :root {
+              /* Typography */
               --font-family-heading: ${designCustomization.fontFamilyHeading || 'system-ui, sans-serif'};
               --font-family-body: ${designCustomization.fontFamilyBody || 'system-ui, sans-serif'};
               --font-family-label: ${designCustomization.fontFamilyLabel || 'system-ui, sans-serif'};
               --font-size-heading: ${designCustomization.fontSizeHeading || '2rem'};
               --font-size-body: ${designCustomization.fontSizeBody || '1rem'};
               --font-size-label: ${designCustomization.fontSizeLabel || '0.875rem'};
+              
+              /* Colors */
+              --primary-color: ${designCustomization.primaryColor || '#3b82f6'};
+              --secondary-color: ${designCustomization.secondaryColor || '#8b5cf6'};
+              --accent-color: ${designCustomization.accentColor || '#10b981'};
+              --text-color-primary: ${designCustomization.textColorPrimary || '#111827'};
+              --text-color-secondary: ${designCustomization.textColorSecondary || '#6b7280'};
+              --border-color-default: ${designCustomization.borderColorDefault || '#e5e7eb'};
+              
+              /* Links & CTAs */
               --link-color-default: ${designCustomization.linkColorDefault || '#3b82f6'};
               --link-color-hover: ${designCustomization.linkColorHover || '#2563eb'};
               --link-color-active: ${designCustomization.linkColorActive || '#1d4ed8'};
               --cta-color-default: ${designCustomization.ctaColorDefault || '#10b981'};
               --cta-color-hover: ${designCustomization.ctaColorHover || '#059669'};
               --cta-color-active: ${designCustomization.ctaColorActive || '#047857'};
+              
+              /* Card Styles */
+              --card-border-radius: ${getCardBorderRadius(designCustomization.cardBorderRadius, designCustomization.cardBorderRadiusCustom)};
+              --card-elevation: ${getCardElevation(designCustomization.cardElevation)};
+              --card-shadow-color: ${designCustomization.cardShadowColor || 'rgba(0, 0, 0, 0.1)'};
+              --card-surface-color: ${designCustomization.cardSurfaceColor || '#ffffff'};
+              --card-border-width: ${designCustomization.cardBorderWidth || '0'};
+              --card-border-color: ${designCustomization.cardBorderColor || '#e5e7eb'};
+              --card-border-style: ${designCustomization.cardBorderStyle || 'solid'};
+              
+              /* Spacing */
+              --global-spacing: ${designCustomization.globalSpacing || '8px'};
+              --component-gap: ${designCustomization.componentGap || '24px'};
+              --global-padding: ${designCustomization.globalPadding || '16px'};
+              
+              /* Transitions */
+              --transition-duration: ${designCustomization.transitionDuration || '150ms'};
+              --transition-easing: ${designCustomization.transitionEasing || 'ease-in-out'};
+              --transition: all var(--transition-duration) var(--transition-easing);
             }
             
+            /* Typography */
             h1, h2, h3, h4, h5, h6 {
               font-family: var(--font-family-heading);
               font-size: var(--font-size-heading);
+              color: var(--text-color-primary);
             }
             
             body, p, span, div {
               font-family: var(--font-family-body);
               font-size: var(--font-size-body);
+              color: var(--text-color-primary);
             }
             
             label, small {
               font-family: var(--font-family-label);
               font-size: var(--font-size-label);
+              color: var(--text-color-secondary);
             }
             
+            /* Links */
             a {
               color: var(--link-color-default);
+              transition: color var(--transition-duration) var(--transition-easing);
             }
             
             a:hover {
@@ -2606,8 +2734,10 @@ const StudioTab: React.FC<StudioTabProps> = ({
               color: var(--link-color-active);
             }
             
+            /* CTAs */
             button.cta, .cta-button {
               background-color: var(--cta-color-default);
+              transition: background-color var(--transition-duration) var(--transition-easing);
             }
             
             button.cta:hover, .cta-button:hover {
@@ -2616,6 +2746,38 @@ const StudioTab: React.FC<StudioTabProps> = ({
             
             button.cta:active, .cta-button:active {
               background-color: var(--cta-color-active);
+            }
+            
+            /* Card Styles - Applied globally */
+            .card, [class*="card"], .component-card, .component-wrapper > * {
+              border-radius: var(--card-border-radius);
+              background-color: var(--card-surface-color);
+              border: var(--card-border-width) var(--card-border-style) var(--card-border-color);
+              box-shadow: var(--card-elevation);
+              transition: var(--transition);
+            }
+            
+            /* Global Spacing */
+            .component-wrapper {
+              margin-bottom: var(--component-gap);
+            }
+            
+            /* Text Colors - Applied to all text elements */
+            .component-wrapper, .component-wrapper * {
+              color: var(--text-color-primary);
+            }
+            
+            .component-wrapper p, .component-wrapper span, .component-wrapper div {
+              color: var(--text-color-primary);
+            }
+            
+            .component-wrapper label, .component-wrapper small {
+              color: var(--text-color-secondary);
+            }
+            
+            /* Interactive Elements */
+            button, a, input, select, textarea {
+              transition: var(--transition);
             }
           `}</style>
         </div>
@@ -2932,8 +3094,8 @@ const StudioTab: React.FC<StudioTabProps> = ({
                           <VideoSettings
                             props={selectedComponent.props as VideoProps}
                             onPropsChange={(newProps) => updateComponentProps(selectedComponent.id, newProps)}
-                          />
-                        )}
+                        />
+                  )}
 
                         {selectedComponent.type === 'Image+Text' && (
                           <ImageTextSettings
@@ -2946,7 +3108,7 @@ const StudioTab: React.FC<StudioTabProps> = ({
                           <SocialLinksSettings
                             props={selectedComponent.props as SocialLinksProps}
                             onPropsChange={(newProps) => updateComponentProps(selectedComponent.id, newProps)}
-                          />
+                        />
                         )}
 
                         {selectedComponent.type === 'Contact Us' && (
@@ -2967,8 +3129,8 @@ const StudioTab: React.FC<StudioTabProps> = ({
                           <AddressSettings
                             props={selectedComponent.props as AddressProps}
                             onPropsChange={(newProps) => updateComponentProps(selectedComponent.id, newProps)}
-                          />
-                        )}
+                        />
+                  )}
 
                         {selectedComponent.type === 'Map' && (
                           <MapSettings
@@ -3006,121 +3168,10 @@ const StudioTab: React.FC<StudioTabProps> = ({
                         )}
 
                         {selectedComponent.type === 'Images+Link' && (
-                          <>
-                            <ImagesLinkSettings
-                              props={selectedComponent.props as ImagesLinkProps}
-                              onPropsChange={(newProps) => updateComponentProps(selectedComponent.id, newProps)}
-                            />
-                            
-                            {/* Advanced Styling Options - Only for Images+Link */}
-                            <div className="border-t border-gray-200 pt-6">
-                              <h4 className="text-sm font-medium text-gray-900 mb-4">Advanced Styling</h4>
-                    <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
-                      <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Margin Top</label>
-                        <input
-                          type="text"
-                                      value={selectedComponent.style?.margin?.top || ''}
-                                      onChange={(e) => updateComponentStyle(selectedComponent.id, {
-                                        margin: {
-                                          ...selectedComponent.style?.margin,
-                                          top: e.target.value
-                                        }
-                                      })}
-                                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      placeholder="0px"
-                        />
-                      </div>
-                      <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Margin Bottom</label>
-                        <input
-                          type="text"
-                                      value={selectedComponent.style?.margin?.bottom || ''}
-                                      onChange={(e) => updateComponentStyle(selectedComponent.id, {
-                                        margin: {
-                                          ...selectedComponent.style?.margin,
-                                          bottom: e.target.value
-                                        }
-                                      })}
-                                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      placeholder="0px"
-                        />
-                      </div>
-                      <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Margin Left</label>
-                        <input
-                          type="text"
-                                      value={selectedComponent.style?.margin?.left || ''}
-                                      onChange={(e) => updateComponentStyle(selectedComponent.id, {
-                                        margin: {
-                                          ...selectedComponent.style?.margin,
-                                          left: e.target.value
-                                        }
-                                      })}
-                                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      placeholder="0px"
-                        />
-                      </div>
-                      <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Margin Right</label>
-                        <input
-                          type="text"
-                                      value={selectedComponent.style?.margin?.right || ''}
-                                      onChange={(e) => updateComponentStyle(selectedComponent.id, {
-                                        margin: {
-                                          ...selectedComponent.style?.margin,
-                                          right: e.target.value
-                                        }
-                                      })}
-                                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      placeholder="0px"
-                        />
-                      </div>
-                      </div>
-                      <div>
-                                  <label className="block text-xs font-medium text-gray-700 mb-1">Background Color</label>
-                                  <div className="flex items-center space-x-2">
-                        <input
-                          type="color"
-                                      value={selectedComponent.style?.backgroundColor || '#ffffff'}
-                                      onChange={(e) => updateComponentStyle(selectedComponent.id, { backgroundColor: e.target.value })}
-                                      className="w-12 h-8 border border-gray-300 rounded cursor-pointer"
-                                    />
-                        <input
-                          type="text"
-                                      value={selectedComponent.style?.backgroundColor || ''}
-                                      onChange={(e) => updateComponentStyle(selectedComponent.id, { backgroundColor: e.target.value })}
-                                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      placeholder="#ffffff"
-                        />
-                      </div>
-                    </div>
-                                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Border Radius</label>
-                        <input
-                          type="text"
-                                      value={selectedComponent.style?.borderRadius || ''}
-                                      onChange={(e) => updateComponentStyle(selectedComponent.id, { borderRadius: e.target.value })}
-                                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      placeholder="0px"
-                        />
-                      </div>
-                      <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">Width</label>
-                        <input
-                          type="text"
-                                      value={selectedComponent.style?.width || ''}
-                                      onChange={(e) => updateComponentStyle(selectedComponent.id, { width: e.target.value })}
-                                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                      placeholder="100%"
-                        />
-                      </div>
-                      </div>
-                    </div>
-                  </div>
-                          </>
+                          <ImagesLinkSettings
+                            props={selectedComponent.props as ImagesLinkProps}
+                            onPropsChange={(newProps) => updateComponentProps(selectedComponent.id, newProps)}
+                          />
                         )}
                 </div>
               )}
@@ -3308,7 +3359,7 @@ const StudioTab: React.FC<StudioTabProps> = ({
               <QRLinkPanel
                 data={qrLinkData}
                 onChange={updateQrLinkDataWithHistory}
-                baseUrl="https://example.com"
+                baseUrl={typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'}
                 folders={folders}
                 existingQRCodes={existingQRCodes}
                 onSaveAndLockSlug={handleSaveAndLockSlug}
@@ -3316,6 +3367,7 @@ const StudioTab: React.FC<StudioTabProps> = ({
               slugAvailability={slugAvailability}
               slugError={slugError}
               onUnlockSlug={handleUnlockSlug}
+              studioPageId={currentPageId}
               />
             </div>
       )}

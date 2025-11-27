@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Lock, Copy, Download, ExternalLink, AlertCircle, Check, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Lock, Copy, Download, ExternalLink, AlertCircle, Check, ChevronDown, ChevronUp, Settings, QrCode } from 'lucide-react';
 import QRGenerator, { QRCustomization } from './QRGenerator';
+import { saveQRCode, linkQRCodeToPage, loadQRCodeById } from '../../api/qrCodes';
 
 export interface QRLinkData {
   slug: string;
@@ -42,14 +43,83 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
   slugAvailability = 'idle',
   slugError = '',
   onUnlockSlug,
+  studioPageId = null,
 }) => {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [showLockModal, setShowLockModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showQRGenerator, setShowQRGenerator] = useState(false);
   const [utmExpanded, setUtmExpanded] = useState(false);
+  const [isSavingQR, setIsSavingQR] = useState(false);
+  const [isLoadingQR, setIsLoadingQR] = useState(false);
 
-  const fullUrl = `${baseUrl}/${data.slug}`;
+  // Helper function to validate UUID
+  const isValidUUID = (str: string): boolean => {
+    if (!str) return false;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+
+  // Load saved QR code from database when qrCodeId changes
+  useEffect(() => {
+    const loadSavedQRCode = async () => {
+      if (data.qrCodeId && isValidUUID(data.qrCodeId)) {
+        setIsLoadingQR(true);
+        try {
+          const savedQR = await loadQRCodeById(data.qrCodeId);
+          if (savedQR) {
+            // Update QR code images if they exist in the database
+            if (savedQR.qr_image_png) {
+              onChange('qrImagePng', savedQR.qr_image_png);
+            }
+            if (savedQR.qr_image_svg) {
+              onChange('qrImageSvg', savedQR.qr_image_svg);
+            }
+            if (savedQR.qr_image_jpeg) {
+              onChange('qrImageJpeg', savedQR.qr_image_jpeg);
+            }
+            if (savedQR.customization) {
+              onChange('qrCustomization', savedQR.customization);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading saved QR code:', error);
+        } finally {
+          setIsLoadingQR(false);
+        }
+      }
+    };
+
+    loadSavedQRCode();
+  }, [data.qrCodeId, onChange]); // Load when qrCodeId changes
+
+  // Generate a blurred placeholder QR code (simple static pattern)
+  const getPlaceholderQR = () => {
+    // Create a simple SVG pattern that looks like a blurred QR code
+    const blocks = [];
+    for (let i = 0; i < 15; i++) {
+      for (let j = 0; j < 15; j++) {
+        if (Math.random() > 0.5) {
+          const size = 10;
+          const x = 30 + i * 13;
+          const y = 30 + j * 13;
+          blocks.push(`<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="#9ca3af" opacity="0.4"/>`);
+        }
+      }
+    }
+    
+    const svgContent = `
+      <svg width="256" height="256" xmlns="http://www.w3.org/2000/svg">
+        <rect width="256" height="256" fill="#f3f4f6"/>
+        <rect x="20" y="20" width="216" height="216" fill="#ffffff" stroke="#d1d5db" stroke-width="2"/>
+        ${blocks.join('')}
+      </svg>
+    `;
+    
+    return `data:image/svg+xml;base64,${btoa(svgContent)}`;
+  };
+
+  const fullUrl = `${baseUrl}/published-product/${data.slug}`;
   const urlWithUTM = data.utmSource || data.utmMedium || data.utmCampaign
     ? `${fullUrl}?${[
         data.utmSource && `utm_source=${encodeURIComponent(data.utmSource)}`,
@@ -112,6 +182,7 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
   };
 
   const handleTestScan = () => {
+    // Open the published page URL directly (not the QR redirect)
     window.open(fullUrl, '_blank');
   };
 
@@ -139,22 +210,66 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
     setShowQRGenerator(true);
   };
 
-  const handleQRGenerated = (qrData: {
+  const handleQRGenerated = async (qrData: {
     qrId: string;
     qrImagePng: string;
     qrImageSvg: string;
     qrImageJpeg: string;
     customization: QRCustomization;
   }) => {
-    // Update QR code data
-    onChange('qrCodeId', qrData.qrId);
-    onChange('qrImagePng', qrData.qrImagePng);
-    onChange('qrImageSvg', qrData.qrImageSvg);
-    onChange('qrImageJpeg', qrData.qrImageJpeg);
-    onChange('qrCustomization', qrData.customization);
-    onChange('qrOption', 'create_new');
-    
-    setShowQRGenerator(false);
+    setIsSavingQR(true);
+    try {
+      // For new QR codes, use null to let database generate UUID
+      // For existing QR codes, use the existing UUID (data.qrCodeId)
+      // qrData.qrId might be a temporary string like "qr-123456789", so we ignore it for new codes
+      const qrCodeIdToUse = data.qrCodeId || null;
+
+      // For new QR codes, the images were generated with the direct published URL (fullUrl)
+      // For existing QR codes (with qrCodeId), they were generated with the redirect URL
+      const qrUrl = data.qrCodeId 
+        ? `${baseUrl}/qr/${data.qrCodeId}${urlWithUTM !== fullUrl ? `?${urlWithUTM.split('?')[1]}` : ''}` // Redirect URL for tracking
+        : (urlWithUTM || fullUrl); // Direct published URL (now includes /published-product/)
+
+      // Save QR code to database - pass null for new codes to let DB generate UUID
+      const qrCode = await saveQRCode(qrCodeIdToUse, {
+        name: data.campaignName || `QR Code for ${data.slug || 'Page'}`,
+        url: qrUrl,
+        qrImagePng: qrData.qrImagePng,
+        qrImageSvg: qrData.qrImageSvg,
+        qrImageJpeg: qrData.qrImageJpeg,
+        customization: qrData.customization,
+        campaignName: data.campaignName || null,
+        folderId: data.folderId || null,
+        utmSource: data.utmSource || undefined,
+        utmMedium: data.utmMedium || undefined,
+        utmCampaign: data.utmCampaign || undefined,
+      });
+
+      // Link QR code to studio page if page ID exists
+      if (studioPageId && qrCode.id) {
+        await linkQRCodeToPage(qrCode.id, studioPageId);
+      }
+
+      // If this is a new QR code (no qrCodeId), we can optionally regenerate with redirect URL for tracking
+      // But for now, we'll save with the direct URL so it works immediately
+      // Users can regenerate later with the redirect URL if they want tracking
+
+      // Update QR code data in state
+      onChange('qrCodeId', qrCode.id);
+      onChange('qrImagePng', qrData.qrImagePng);
+      onChange('qrImageSvg', qrData.qrImageSvg);
+      onChange('qrImageJpeg', qrData.qrImageJpeg);
+      onChange('qrCustomization', qrData.customization);
+      onChange('qrOption', 'create_new');
+
+      setShowQRGenerator(false);
+      alert('QR code saved successfully!');
+    } catch (error: any) {
+      console.error('Error saving QR code:', error);
+      alert(`Failed to save QR code: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsSavingQR(false);
+    }
   };
 
   const handleEditQR = () => {
@@ -353,54 +468,100 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
 
               {data.qrOption === 'create_new' && (
                 <div className="space-y-3">
-                  {!data.qrImagePng && (
-                    <button
-                      onClick={handleCreateQR}
-                      disabled={!data.slug || data.slug.trim() === ''}
-                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                    >
-                      <Settings className="w-4 h-4 mr-2" />
-                      {data.qrCodeId ? 'Regenerate QR Code' : 'Generate QR Code'}
-                    </button>
-                  )}
-
-                  {(data.qrImagePng || data.qrImageSvg || data.qrImageJpeg) && (
-                    <div className="p-4 border border-gray-200 rounded-lg bg-white space-y-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-900">QR Code Preview</p>
-                        {data.qrCodeId && (
-                          <button
-                            onClick={handleEditQR}
-                            className="inline-flex items-center px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                            title="Edit QR Code Design"
-                          >
-                            <Settings className="w-3 h-3 mr-1" />
-                            Edit Design
-                          </button>
+                  {/* Always show QR code preview - saved or placeholder */}
+                  <div className="p-4 border border-gray-200 rounded-lg bg-white space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-900">
+                        {data.qrCodeId && isValidUUID(data.qrCodeId) ? 'Saved QR Code Preview' : 'QR Code Preview'}
+                      </p>
+                      {data.qrCodeId && isValidUUID(data.qrCodeId) && (
+                        <button
+                          onClick={handleEditQR}
+                          className="inline-flex items-center px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit QR Code Design"
+                        >
+                          <Settings className="w-3 h-3 mr-1" />
+                          Edit Design
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-center space-y-3">
+                      <div className={`w-48 h-48 bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center relative ${
+                        !data.qrCodeId || !isValidUUID(data.qrCodeId) ? 'opacity-50' : ''
+                      }`}>
+                        {isLoadingQR ? (
+                          <div className="flex flex-col items-center justify-center space-y-2">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                            <p className="text-xs text-gray-500">Loading...</p>
+                          </div>
+                        ) : (data.qrImagePng || data.qrImageSvg || data.qrImageJpeg) && (data.qrCodeId && isValidUUID(data.qrCodeId)) ? (
+                          // Show saved QR code
+                          <img
+                            src={data.qrImagePng || data.qrImageSvg || data.qrImageJpeg}
+                            alt="Saved QR Code"
+                            className="w-full h-full object-contain p-2"
+                          />
+                        ) : (
+                          // Show blurred placeholder QR code
+                          <div className="relative w-full h-full flex flex-col items-center justify-center">
+                            <img
+                              src={getPlaceholderQR()}
+                              alt="Placeholder QR Code"
+                              className="w-full h-full object-contain p-2 blur-sm"
+                            />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 rounded-lg">
+                              <QrCode className="w-12 h-12 text-gray-400 mb-2" />
+                              <p className="text-xs text-gray-600 text-center px-4">
+                                {!data.slug || data.slug.trim() === '' 
+                                  ? 'Enter a slug first to generate QR code'
+                                  : 'Generate QR Code to save and preview'
+                                }
+                              </p>
+                            </div>
+                          </div>
                         )}
                       </div>
-                      <div className="flex flex-col items-center space-y-3">
-                        <div className="w-48 h-48 bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center">
-                          {data.qrImagePng ? (
-                            <img
-                              src={data.qrImagePng}
-                              alt="QR Code"
-                              className="w-full h-full object-contain p-2"
-                            />
-                          ) : data.qrImageSvg ? (
-                            <img
-                              src={data.qrImageSvg}
-                              alt="QR Code"
-                              className="w-full h-full object-contain p-2"
-                            />
-                          ) : (
-                            <p className="text-gray-400 text-sm">QR Code Preview</p>
-                          )}
+                      {data.qrCodeId && isValidUUID(data.qrCodeId) && (
+                        <div className="flex items-center space-x-2">
+                          <Check className="w-4 h-4 text-green-600" />
+                          <p className="text-xs text-green-600">QR Code Saved</p>
+                          <p className="text-xs text-gray-500">•</p>
+                          <p className="text-xs text-gray-500">ID: <span className="font-mono">{data.qrCodeId.substring(0, 8)}...</span></p>
                         </div>
-                        {data.qrCodeId && (
-                          <p className="text-xs text-gray-500">QR ID: <span className="font-mono">{data.qrCodeId}</span></p>
+                      )}
+                      {(!data.qrCodeId || !isValidUUID(data.qrCodeId)) && (
+                        <p className="text-xs text-amber-600 flex items-center">
+                          <AlertCircle className="w-3 h-3 mr-1" />
+                          QR code not saved yet. Generate and save to enable scanning.
+                        </p>
+                      )}
+                      
+                      {/* Generate/Edit Button */}
+                      <button
+                        onClick={handleCreateQR}
+                        disabled={!data.slug || data.slug.trim() === '' || isSavingQR || isLoadingQR}
+                        className={`w-full px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
+                          data.qrCodeId && isValidUUID(data.qrCodeId)
+                            ? 'bg-blue-600 text-white hover:bg-blue-700'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {isSavingQR ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Settings className="w-4 h-4 mr-2" />
+                            {data.qrCodeId && isValidUUID(data.qrCodeId) ? 'Edit QR Code Design' : 'Generate QR Code'}
+                          </>
                         )}
-                        <div className="flex flex-wrap gap-2 justify-center">
+                      </button>
+                      
+                      {/* Download buttons - only show if QR code is saved */}
+                      {data.qrCodeId && isValidUUID(data.qrCodeId) && (data.qrImagePng || data.qrImageSvg || data.qrImageJpeg) && (
+                        <div className="flex flex-wrap gap-2 justify-center w-full pt-2 border-t border-gray-200">
                           <button
                             onClick={handleCopyUrl}
                             className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-xs"
@@ -452,9 +613,9 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
                             Test Scan
                           </button>
                         </div>
-                      </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>
@@ -597,7 +758,10 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
       {/* QR Generator Modal */}
       {showQRGenerator && (
         <QRGenerator
-          url={urlWithUTM || fullUrl}
+          url={data.qrCodeId 
+            ? `${baseUrl}/qr/${data.qrCodeId}${urlWithUTM !== fullUrl ? `?${urlWithUTM.split('?')[1]}` : ''}`
+            : (urlWithUTM || fullUrl) // For new QR codes, use direct published URL (includes /published-product/)
+          }
           qrId={data.qrCodeId || undefined}
           existingCustomization={data.qrCustomization}
           onGenerate={handleQRGenerated}

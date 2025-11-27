@@ -15,6 +15,8 @@ export const ImagesLinkComponent: React.FC<ImagesLinkComponentProps> = ({
   onClick
 }) => {
   const {
+    cardTitle,
+    cardDescription,
     items = [],
     layout = 'grid',
     columns = 3,
@@ -24,7 +26,7 @@ export const ImagesLinkComponent: React.FC<ImagesLinkComponentProps> = ({
     showDescriptions = false,
     imageBorderRadius = '8px',
     hoverEffect = 'zoom',
-    linkStyle = 'entire-image'
+    contentDisplay = 'overlay'
   } = props;
 
   const [currentIndex, setCurrentIndex] = useState(0); // For carousel
@@ -44,16 +46,65 @@ export const ImagesLinkComponent: React.FC<ImagesLinkComponentProps> = ({
     lift: 'transition-transform duration-300 hover:-translate-y-2'
   }[hoverEffect];
 
-  const containerStyle: React.CSSProperties = {
-    gap: spacing,
+  const wrapperStyle: React.CSSProperties = {
     ...style
+  };
+
+  const containerStyle: React.CSSProperties = {
+    gap: spacing
   };
 
   const imageStyle: React.CSSProperties = {
     borderRadius: imageBorderRadius
   };
 
-  const renderImage = (item: ImageLinkItem, index: number) => {
+  const hasCaption = (item: ImageLinkItem) =>
+    (showTitles && item.title) || (showDescriptions && item.description);
+
+  const renderCaption = (item: ImageLinkItem, variant: 'overlay' | 'standard') => (
+    <>
+      {showTitles && item.title && (
+        <h3
+          className={`font-semibold ${
+            variant === 'overlay' ? 'text-white text-lg' : 'text-gray-900 text-base'
+          }`}
+        >
+          {item.title}
+        </h3>
+      )}
+      {showDescriptions && item.description && (
+        <p className={variant === 'overlay' ? 'text-white/90 text-sm' : 'text-gray-600 text-sm'}>
+          {item.description}
+        </p>
+      )}
+    </>
+  );
+
+  const renderImage = (
+    item: ImageLinkItem,
+    index: number,
+    options?: {
+      displayMode?: 'overlay' | 'below' | 'above';
+      showCaption?: boolean;
+    showButton?: boolean;
+    }
+  ) => {
+    const displayMode = options?.displayMode ?? contentDisplay;
+    const shouldShowCaption = options?.showCaption ?? true;
+  const shouldShowButton = options?.showButton ?? true;
+    const captionAvailable = shouldShowCaption && hasCaption(item);
+    const overlayCaption =
+      captionAvailable && displayMode === 'overlay' ? (
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 space-y-1">
+          {renderCaption(item, 'overlay')}
+        </div>
+      ) : null;
+
+    const standardCaption =
+      captionAvailable && displayMode !== 'overlay' ? (
+        <div className="space-y-1">{renderCaption(item, 'standard')}</div>
+      ) : null;
+
     const imageContent = (
       <div className={`relative ${hoverEffectClass}`}>
         <img
@@ -65,64 +116,62 @@ export const ImagesLinkComponent: React.FC<ImagesLinkComponentProps> = ({
             (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image';
           }}
         />
-        {(showTitles || showDescriptions) && (item.title || item.description) && (
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 text-white">
-            {showTitles && item.title && (
-              <h3 className="font-semibold text-lg mb-1">{item.title}</h3>
-            )}
-            {showDescriptions && item.description && (
-              <p className="text-sm opacity-90">{item.description}</p>
-            )}
-          </div>
-        )}
-        {linkStyle === 'overlay' && item.link && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-colors pointer-events-none">
-            <span className="text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-              View
-            </span>
-          </div>
-        )}
-        {linkStyle === 'button' && item.link && (
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-            <a
-              href={item.link}
-              target={item.openInNewTab ? '_blank' : '_self'}
-              rel={item.openInNewTab ? 'noopener noreferrer' : undefined}
-              className="bg-white text-gray-900 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors pointer-events-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              View
-            </a>
-          </div>
-        )}
+        {overlayCaption}
       </div>
     );
 
-    if (item.link && linkStyle === 'entire-image') {
-      return (
-        <a
-          key={item.id || index}
-          href={item.link}
-          target={item.openInNewTab ? '_blank' : '_self'}
-          rel={item.openInNewTab ? 'noopener noreferrer' : undefined}
-          className="block"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {imageContent}
-        </a>
-      );
-    }
+    const clickableImage = item.link ? (
+      <a
+        href={item.link}
+        target={item.openInNewTab ? '_blank' : '_self'}
+        rel={item.openInNewTab ? 'noopener noreferrer' : undefined}
+        className="block"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {imageContent}
+      </a>
+    ) : (
+      imageContent
+    );
 
     return (
-      <div key={item.id || index} className="block">
-        {imageContent}
+      <div key={item.id || index} className="flex flex-col gap-3">
+        {displayMode === 'above' && standardCaption}
+        {clickableImage}
+        {displayMode === 'below' && standardCaption}
+        {shouldShowButton && item.link && (
+          <a
+            href={item.link}
+            target={item.openInNewTab ? '_blank' : '_self'}
+            rel={item.openInNewTab ? 'noopener noreferrer' : undefined}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            View
+          </a>
+        )}
       </div>
     );
   };
 
+  const hasCardIntro = Boolean(cardTitle?.trim() || cardDescription?.trim());
+  const cardIntro = hasCardIntro ? (
+    <div className="space-y-1">
+      {cardTitle && <h2 className="text-2xl font-semibold text-gray-900">{cardTitle}</h2>}
+      {cardDescription && <p className="text-gray-600">{cardDescription}</p>}
+    </div>
+  ) : null;
+
+  const renderWithWrapper = (content: React.ReactNode) => (
+    <div style={wrapperStyle} onClick={onClick} className="space-y-4">
+      {cardIntro}
+      {content}
+    </div>
+  );
+
   // Show placeholder if no items
   if (!items || items.length === 0) {
-    return (
+    return renderWithWrapper(
       <div className="w-full p-8 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-500">
         <div className="text-lg font-medium mb-2">Images+Link Component</div>
         <div className="text-sm">Add images in the settings panel</div>
@@ -131,11 +180,8 @@ export const ImagesLinkComponent: React.FC<ImagesLinkComponentProps> = ({
   }
 
   if (layout === 'carousel') {
-    return (
-      <div
-        className="relative w-full"
-        style={containerStyle}
-      >
+    return renderWithWrapper(
+      <div className="relative w-full" style={containerStyle}>
         <div className="overflow-hidden rounded-lg">
           <div
             className="flex transition-transform duration-500 ease-in-out"
@@ -192,15 +238,12 @@ export const ImagesLinkComponent: React.FC<ImagesLinkComponentProps> = ({
   }
 
   if (layout === 'list') {
-    return (
-      <div
-        className="space-y-4"
-        style={containerStyle}
-      >
+    return renderWithWrapper(
+      <div className="space-y-4" style={containerStyle}>
         {items.map((item, index) => (
           <div key={item.id || index} className="flex gap-4">
             <div className="w-1/3 flex-shrink-0">
-              {renderImage(item, index)}
+              {renderImage(item, index, { showCaption: false, showButton: false })}
             </div>
             <div className="flex-1">
               {showTitles && item.title && (
@@ -209,7 +252,7 @@ export const ImagesLinkComponent: React.FC<ImagesLinkComponentProps> = ({
               {showDescriptions && item.description && (
                 <p className="text-gray-600 mb-2">{item.description}</p>
               )}
-              {item.link && linkStyle === 'button' && (
+              {item.link && (
                 <a
                   href={item.link}
                   target={item.openInNewTab ? '_blank' : '_self'}
@@ -228,12 +271,13 @@ export const ImagesLinkComponent: React.FC<ImagesLinkComponentProps> = ({
   }
 
   // Grid layout
-  return (
+  const safeColumns = Math.min(4, Math.max(1, columns || 1));
+  return renderWithWrapper(
     <div
       className="grid w-full"
       style={{
         ...containerStyle,
-        gridTemplateColumns: `repeat(${columns}, 1fr)`
+        gridTemplateColumns: `repeat(${safeColumns}, 1fr)`
       }}
     >
       {items.map((item, index) => renderImage(item, index))}
@@ -262,6 +306,8 @@ export const getImagesLinkDefaultProps = (): ImagesLinkProps => ({
   showDescriptions: false,
   imageBorderRadius: '8px',
   hoverEffect: 'zoom',
-  linkStyle: 'entire-image'
+  cardTitle: '',
+  cardDescription: '',
+  contentDisplay: 'overlay'
 });
 

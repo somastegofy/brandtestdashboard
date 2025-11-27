@@ -1,0 +1,807 @@
+
+import { Component, ElementRef, HostListener, Renderer2 } from "@angular/core";
+import { MatCardLgImage } from "@angular/material/card";
+import { MatDialog } from "@angular/material/dialog";
+import { ActivatedRoute, NavigationEnd, Router } from "@angular/router";
+import Resources from "@constants/resourses";
+import { RestapiService } from "@services/restapi.service";
+import { SessionService } from "@services/session.service";
+import { LogoutPopupComponent } from "@shared/dialog/logout-popup/logout-popup.component";
+import { SessionTimeoutPopupComponent } from "@shared/dialog/session-timeout-popup/session-timeout-popup.component";
+
+@Component({
+  selector: "app-topbar-dashboard",
+  templateUrl: "./topbar-dashboard.component.html",
+  styleUrls: ["./topbar-dashboard.component.scss"],
+})
+export class TopbarDashboardComponent {
+  isSelectMailBox: boolean;
+  isSelectHome: boolean;
+  isSelectMatches: boolean;
+  isSelectChat: boolean;
+  isSelectSearch: boolean;
+  isShowProfile: any;
+  isNavOpen: boolean;
+  gender: any;
+  isSelectedHome: boolean;
+  UserDetails: any;
+  promoterUser: any;
+  referralDetails: any;
+  profileImages: any;
+  isShowProfileref: boolean;
+  promoterUsers: any[];
+  notificationLength: number;
+  notificationCountDynamic: any;
+  countNotifi: any[];
+  notificationIds: any;
+
+
+  constructor(
+    public dialog: MatDialog,
+    private router: Router,
+    private restapi: RestapiService,
+    private sessionService: SessionService,
+    private route: ActivatedRoute,
+    private eRef: ElementRef,
+    private renderer: Renderer2
+  ) {
+    this.promoterUser = this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.ReferralUser
+    );
+    this.referralDetails = this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.ReferralProfileDetails
+    );
+
+    // this.notificationLength = this.sessionService.getItemFromSession(
+    //   Resources.SessionStorageKeys.NotificationLength
+    // );
+
+    this.notificationsData = this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.Notification
+    );
+
+    this.router?.events?.subscribe((event) => {
+      if (event instanceof NavigationEnd) {
+        // Check if the current route is '/settings/edit-email'
+        this.isSelectedHome = this.router.url === "/dashboard";
+        this.isSelectMatches =
+          this.router.url === "/dashboard/listing-profiles";
+        this.isSelectMailBox = this.router.url === "/dashboard/mail-box";
+        this.isSelectSearch = this.router.url === "/dashboard/search";
+        this.isSelectChat = this.router.url === "/dashboard/chat-box";
+
+        // console.log(this.isEditEmail)
+      }
+    });
+    if (window.location.pathname === "/dashboard") {
+      this.isSelectedHome = true;
+    }
+
+    // if(this.promoterUser){
+    // } else {
+    //   this.dynamicNotificationCount(this.referralDetails?.lastLoginDate);
+    // }
+
+    this.gender = this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.Gender
+    );
+
+    
+
+    
+
+
+
+    // this.getNotificationsNew();
+
+
+  }
+
+  
+  homePage() {
+    this.router.navigate(["dashboard"]);
+  }
+
+  // logout() {
+  //   this.router.navigate(["/"]);
+  //   this.sessionService.clearSessionStorage();
+  // }
+
+  matchesPage() {
+    this.router.navigate(["dashboard/listing-profiles"]);
+  }
+
+  // showmailbox() {
+  //   this.router.navigate(["dashboard/mail-box"]);
+  // }
+
+  showNotificationPath(item) {
+
+    console.log(`item`, item)
+    if(item.action === 'pending'){
+      this.sessionService.setItemIntoSession(Resources.SessionStorageKeys.NotificationType, item)
+      this.router.navigate(["dashboard/mail-box"]);
+    } else if(item.action === 'accepted'){
+      this.sessionService.setItemIntoSession(Resources.SessionStorageKeys.NotificationType, item)
+      this.router.navigate(["dashboard/mail-box"]);
+    } else if(item.action === 'declined'){
+      this.sessionService.setItemIntoSession(Resources.SessionStorageKeys.NotificationType, item)
+      this.router.navigate(["dashboard/mail-box"]);
+    } else if(item.action === 'image'){
+      // this.sessionService.setItemIntoSession(Resources.SessionStorageKeys.NotificationType, item)
+      this.router.navigate(["profile/verify-your-profile"]);
+    }
+
+  }
+
+  mailBox() {
+    this.router.navigate(["dashboard/mail-box"]);
+  }
+
+  chatBox() {
+    this.router.navigate(["dashboard/chat-box"]);
+  }
+
+  searchPage() {
+    this.router.navigate(["dashboard/search"]);
+  }
+
+  // notifications() {
+  // this.getNotifications();
+  //   // this.notificationLength = 0;
+  //   // this.sessionService.setItemIntoSession(
+  //   //   Resources.SessionStorageKeys.NotificationLength,
+  //   //   this.notificationLength
+  //   // );
+  // }
+
+  // calculateDaysFromNow(dateString: string): string {
+  //   console.log('dateString',dateString);
+  //   const givenDate = new Date(dateString); // Convert input string to Date object
+  //   const currentDate = new Date(); // Get current date
+  //   const timeDifference = currentDate.getTime() - givenDate.getTime(); // Time difference in milliseconds
+  //   const daysDifference = Math.floor(timeDifference / (1000 * 60 * 60 * 24)); // Convert to days
+
+  //   // Return days as "Nd" or "Today"
+  //   return daysDifference > 0 ? `${daysDifference}d ago` : 'Today';
+  // }
+
+  calculateDaysFromNow(dateString: string): string {
+    const givenDate = new Date(dateString);
+    const currentDate = new Date();
+
+    // Normalize both dates to midnight (00:00) for calendar-day comparison
+    const givenDateMidnight = new Date(
+      givenDate.getFullYear(),
+      givenDate.getMonth(),
+      givenDate.getDate()
+    );
+    const currentDateMidnight = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate()
+    );
+
+    const timeDifference =
+      currentDateMidnight.getTime() - givenDateMidnight.getTime();
+    const daysDifference = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
+
+    return daysDifference > 0 ? `${daysDifference}d ago` : "Today";
+  }
+
+  logout() {
+    this.isNavOpen = !this.isNavOpen;
+
+    const dialogRef = this.dialog.open(LogoutPopupComponent, {
+      data: "",
+      width: window.innerWidth <= 767 ? "95vw" : "500px",
+      autoFocus: false,
+      disableClose: true,
+    });
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result) {
+        this.router.navigate(["/login"]);
+        this.sessionService.clearSessionStorage();
+        // this.sessionService.clearLocalStorage();
+      } else {
+      }
+    });
+  }
+
+  showProfile() {
+    this.isShowProfile = !this.isShowProfile;
+  }
+
+  @HostListener("document:click", ["$event"])
+  onClickOutside(event: MouseEvent): void {
+    // Close the dropdown if the click is outside the component
+    if (this.isShowProfile && !this.eRef.nativeElement.contains(event.target)) {
+      this.isShowProfile = false;
+    }
+  }
+
+  showProfileRef() {
+    this.isShowProfileref = !this.isShowProfileref;
+  }
+
+  logo() {
+    this.router.navigate([""]);
+  }
+
+  toggleNav(data?) {
+    if (data === "Home") {
+      this.router.navigate(["dashboard"]);
+    } else if (data === "Matches") {
+      this.router.navigate(["dashboard/listing-profiles"]);
+    } else if (data === "mailbox") {
+      this.router.navigate(["dashboard/mail-box"]);
+    } else if (data === "Search") {
+      this.router.navigate(["dashboard/search"]);
+    } else if (data === "Chat") {
+      this.router.navigate(["dashboard/chat-box"]);
+    } else if (data === "Notifications") {
+    }
+    this.isNavOpen = !this.isNavOpen;
+  }
+
+  // notifications
+  ignoredData: any[];
+  likedData: any[];
+  favouriteData: any[];
+  notificationsData: any[];
+  fetchingText = true;
+
+  ngOnInit() {
+    this.ignoredData = [];
+    this.likedData = [];
+    this.favouriteData = [];
+    this.notificationsData = [];
+
+    if (this.promoterUser) {
+      this.UserDetails = this.sessionService.getItemFromSession(
+        Resources.SessionStorageKeys.ReferralProfileDetails
+      );
+      this.getReferralPeopleNotifications();
+    } else {
+      this.UserDetails = this.sessionService.getItemFromSession(
+        Resources.SessionStorageKeys.ProfileDetails
+      );
+      // this.getNotifications();
+
+      console.log('this.UserDetails', this.UserDetails)
+
+      setTimeout(() => {
+      this.getNotificationsNew();
+        
+      }, 2000);
+    }
+
+    // console.log('this.promoterUser', this.promoterUser);
+    if (this.promoterUser) {
+      // this.profileImages = this.sessionService.getItemFromSession(Resources.SessionStorageKeys.ProfileDetails)?.images ? this.sessionService.getItemFromSession(Resources.SessionStorageKeys.ProfileDetails)?.images[0]?.url : this.UserDetails?.gender === 'Female' ? "assets/images/femaleph.PNG" : "assets/images/maleph.avif"
+      const profileDetails = this.sessionService.getItemFromSession(
+        Resources.SessionStorageKeys.ReferralProfileDetails
+      );
+      const images = profileDetails?.images;
+
+      // Check if `images` is an array with at least one element and if `url` exists
+      this.profileImages =
+        this.UserDetails?.profilePhoto !== "null"
+          ? this.UserDetails?.profilePhoto
+          : Array.isArray(images) && images.length > 0 && images[0]?.url
+            ? images[0].url
+            : this.UserDetails?.gender === "Female"
+              ? "assets/images/femaleph.PNG"
+              : "assets/images/maleph.avif";
+    } else {
+      // this.profileImages = this.sessionService.getItemFromSession(Resources.SessionStorageKeys.ProfileDetails)?.images ? this.sessionService.getItemFromSession(Resources.SessionStorageKeys.ProfileDetails)?.images[0]?.url : this.UserDetails?.gender === 'Female' ? "assets/images/femaleph.PNG" : "assets/images/maleph.avif"
+      const profileDetails = this.sessionService.getItemFromSession(
+        Resources.SessionStorageKeys.ProfileDetails
+      );
+      const images = profileDetails?.images;
+
+      // Check if `images` is an array with at least one element and if `url` exists
+      this.profileImages =
+        this.UserDetails?.profilePhoto !== "null"
+          ? this.UserDetails?.profilePhoto
+          : Array.isArray(images) && images.length > 0 && images[0]?.url
+            ? images[0].url
+            : this.UserDetails?.gender === "Female"
+              ? "assets/images/femaleph.PNG"
+              : "assets/images/maleph.avif";
+    }
+  }
+
+  removeIsPrefix(actionType: string) { }
+
+  showProfileFromNoti() {
+    this.router.navigate(["dashboard/mail-box"]);
+  }
+
+  logoutRef() {
+    this.sessionService.clearSessionStorage();
+    this.router.navigate(["/"]);
+  }
+
+  showmailboxpromotor() {
+    this.router.navigate(["dashboard/mail-box"]);
+  }
+
+  notificationsSeen() {
+    this.notificationCountDynamic = 0;
+    this.sessionService.setItemIntoLocal(
+      Resources.SessionStorageKeys.NotificationCountMakeZero,
+      false
+    );
+
+
+  }
+
+
+  onMenuClosed() {
+    console.log("MatMenu was closed!");
+    // ✅ Put your logic here
+    // Example: Mark notifications as seen, stop loader, etc.
+    this.clearNotifications();
+
+  }
+
+
+  clearNotifications() {
+    if (this.notificationIds.length === 0) {
+      return
+    }
+
+    // console.log('this.324', this.notificationIds)
+
+
+    const cPath = `customer/${this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.CustomerId
+    )}/profile/${this.UserDetails?.ProfileId || this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.ProfileId
+    )}/notification`;
+    const bodyObj = this.notificationIds
+    // const bodyObj = {
+    //   id: [123],
+    // };
+    // console.log('this.335', this.notificationIds)
+
+    this.restapi.deleteAPI(cPath, bodyObj).subscribe(
+      (data) => {
+        // console.log(data);
+        this.getNotificationsNew();
+      },
+      (err) => {
+        console.error(err);
+      }
+    );
+  }
+
+  // promotor notifications
+  getReferralPeopleNotifications() {
+    const cPath = `customer/${this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.CustomerId
+    )}/referralDetails`;
+    this.restapi.getAPI(cPath).subscribe(
+      (data) => {
+        this.promoterUsers = data.sort((a, b) => {
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+        });
+
+        // if (
+        //   !this.sessionService.getItemFromSession(
+        //     Resources.SessionStorageKeys.NotificationLength
+        //   )
+        // ) {
+        //   this.notificationLength = this.promoterUsers?.length;
+        //   this.sessionService.setItemIntoSession(
+        //     Resources.SessionStorageKeys.NotificationLength,
+        //     this.notificationLength
+        //   );
+        // }
+
+        if (
+          this.sessionService.getItemFromLocal(
+            Resources.SessionStorageKeys.NotificationCountMakeZero
+          )
+        ) {
+
+          this.dynamicNotificationCount(this.UserDetails?.lastLoginDate);
+        }
+      },
+      (err) => {
+        console.error(err);
+        this.promoterUsers = [];
+        if (
+          this.sessionService.getItemFromLocal(
+            Resources.SessionStorageKeys.NotificationCountMakeZero
+          )
+        ) {
+
+          this.dynamicNotificationCount(this.UserDetails?.lastLoginDate);
+        }
+      }
+    );
+
+
+
+  }
+
+  // get wedding notifications
+  // getNotifications() {
+  //   // this.notificationCountDynamic = 0
+  //   // this.sessionService.setItemIntoSession(
+  //   //   Resources.SessionStorageKeys.NotificationCountMakeZero, false
+  //   // )
+
+  //   const cPath = `customer/${this.sessionService.getItemFromSession(
+  //     Resources.SessionStorageKeys.CustomerId
+  //   )}/profile/${this.sessionService.getItemFromSession(
+  //     Resources.SessionStorageKeys.ProfileId
+  //   )}/action`;
+
+  //   this.restapi.getAPI(cPath).subscribe(
+  //     (data) => {
+  //       this.fetchingText = false;
+  //       this.notificationsData = data?.actionedByOthers || [];
+  //       this.sessionService.setItemIntoSession(
+  //         Resources.SessionStorageKeys.Notification,
+  //         this.notificationsData
+  //       );
+
+
+  //       if (
+  //         this.sessionService.getItemFromLocal(
+  //           Resources.SessionStorageKeys.NotificationCountMakeZero
+  //         )
+  //       ) {
+  //         this.dynamicNotificationCount(this.UserDetails?.lastLoginDate);
+  //       }
+  //     },
+  //     (err) => {
+  //       console.error(err);
+  //       this.notificationsData = [];
+  //       this.fetchingText = false;
+  //       if (
+  //         this.sessionService.getItemFromLocal(
+  //           Resources.SessionStorageKeys.NotificationCountMakeZero
+  //         )
+  //       ) {
+
+  //         this.dynamicNotificationCount(this.UserDetails?.lastLoginDate);
+  //       }
+  //     }
+  //   );
+
+
+  // }
+
+  // Wedding & promotor notification count dynamic
+  dynamicNotificationCount(lastLogindate) {
+    // const lastLoginDate = new Date("2025-04-11T22:09:05.043+05:30");
+    const lastLoginDate = lastLogindate ? new Date(lastLogindate) : new Date();
+
+    // console.log('lastLoginDate', lastLoginDate);
+    if (this.promoterUser) {
+      var data = this.promoterUsers || [];
+      const afterLoginDate = data.filter(
+        (item) => new Date(this.getDateValue(item)) > lastLoginDate
+      );
+      const beforeOrOnLoginDate = data.filter(
+        (item) => new Date(this.getDateValue(item)) <= lastLoginDate
+      );
+
+      const result = {
+        countAfterLoginDate:
+          afterLoginDate.length > 0 ? afterLoginDate.length : 0,
+        afterLoginItems: afterLoginDate,
+        beforeOrOnLoginItems: beforeOrOnLoginDate,
+      };
+
+      this.notificationCountDynamic = result?.countAfterLoginDate;
+    } else {
+      // var data = this.countNotifi || [];
+
+
+      // console.log('data', data);
+
+      // const afterLoginDate = data.filter(
+      //   (item) => new Date(this.getDateValue(item)) > lastLoginDate
+      // );
+
+      // console.log('afterLoginDate', afterLoginDate);
+
+      // const beforeOrOnLoginDate = data.filter(
+      //   (item) => new Date(this.getDateValue(item)) <= lastLoginDate
+      // );
+      // console.log('beforeOrOnLoginDate', beforeOrOnLoginDate);
+
+      // const result = {
+      //   countAfterLoginDate:
+      //     afterLoginDate.length > 0 ? afterLoginDate.length : 0,
+      //   afterLoginItems: afterLoginDate,
+      //   beforeOrOnLoginItems: beforeOrOnLoginDate,
+      // };
+
+      // console.log('result', result);
+
+      // this.notificationCountDynamic = result?.countAfterLoginDate;
+
+      // Main logic
+      const data = this.countNotifi || []; // Already your flat array
+      // console.log("data", data);
+
+      // Filter for after login
+      const afterLoginDate = data.filter(item => {
+        return new Date(this.getDateValue(item)) > lastLoginDate;
+      });
+
+      // Filter for before or on login
+      const beforeOrOnLoginDate = data.filter(item => {
+        return new Date(this.getDateValue(item)) <= lastLoginDate;
+      });
+
+      // console.log("afterLoginDate", afterLoginDate);
+      // console.log("beforeOrOnLoginDate", beforeOrOnLoginDate);
+
+      const result = {
+        countAfterLoginDate: afterLoginDate.length,
+        afterLoginItems: afterLoginDate,
+        beforeOrOnLoginItems: beforeOrOnLoginDate
+      };
+
+      // console.log("result", result);
+
+      // Store count
+      this.notificationCountDynamic = result.beforeOrOnLoginItems.length;
+
+    }
+  }
+
+
+  capitalizeName(name: string): string {
+    if (!name) return "";
+    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+  }
+
+  dashboard() {
+    this.router.navigate(['dashboard']);
+  }
+
+  getNotificationsNew() {
+    const cPath = `customer/${this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.CustomerId
+    )}/profile/${this.UserDetails?.ProfileId ||this.sessionService.getItemFromSession(
+      Resources.SessionStorageKeys.ProfileId
+    )
+    }/notification`;
+
+    this.restapi.getAPI(cPath).subscribe(
+      (data) => {
+        // console.log('474', data)
+
+        this.fetchingText = false;
+
+        const mergeddata = [...data.actionedByOthers, ...data.notifications];
+        this.countNotifi = mergeddata
+
+        //   this.notificationIds = [
+        //   ...new Set([
+        //     ...mergeddata
+        //       .filter(item => item?.id !== undefined)
+        //       .map(item => item.id),
+        //     ...mergeddata
+        //       .filter(item => item?.actionId !== undefined)
+        //       .map(item => item.actionId),
+        //   ]),
+        // ];
+
+        const notificationIds = data.notifications?.map(n => n?.id).filter(Boolean) || [];
+        const actionIds = data.actionedByOthers?.map(a => a?.actionId).filter(Boolean) || [];
+
+
+        this.notificationIds = {
+
+          'id': notificationIds,
+          'actionId': actionIds
+
+
+        }
+        // console.log('323', this.notificationIds)
+        // console.log({
+        //   id: notificationIds,
+        //   actionId: actionIds
+        // });
+
+
+        // console.log('Merged IDs + ActionIDs:', this.notificationIds);
+
+
+
+        // console.log('Final Notification IDs:', this.notificationIds);
+
+
+
+
+        const personMessages = (data.actionedByOthers || []).map(person => {
+          let message = "";
+
+          if (person.actionType === "interested") {
+            if (person.status === "pending") {
+              message = `${this.capitalizeName(person.firstName)} recently ${person.actionType} your profile.`;
+            } else if (person.status === "accepted") {
+              message = `${this.capitalizeName(person.firstName)} has accepted your interest.`;
+            } else if (person.status === "declined") {
+              message = `${this.capitalizeName(person.firstName)} has declined your interest.`;
+            }
+          }
+
+          if (person.actionType === "shortlisted") {
+            if (person.status === "pending") {
+              message = `${this.capitalizeName(person.firstName)} recently ${person.actionType} your profile.`;
+            }
+          }
+
+          if (person.actionType === "ignored") {
+            if (person.status === "pending") {
+              message = `${this.capitalizeName(person.firstName)} recently ${person.actionType} your profile.`;
+            }
+          }
+
+          return {
+            message,
+            created_date: this.getDateValue(person),
+            action_type: person.status
+          };
+        });
+
+
+        // Approval messages
+        const approvalMessages = (data.notifications || []).map(note => {
+          let actionWord = note.action === "R" ? "rejected" : "approved";
+          let actionItem = note.type === "sal_doc"
+            ? "salary document"
+            : note.type === "edu_doc"
+              ? "education document"
+              : note.type === "id_doc"
+                ? "ID document"
+                : "image";
+
+          return {
+            message: `Your ${actionItem} was ${actionWord} with message (${note.message}).`,
+            created_date: this.getDateValue(note),
+            action_type: 'image'
+          };
+        });
+
+        // Combine & sort latest first
+        const combined = [...personMessages, ...approvalMessages].sort(
+          (a, b) => new Date(this.getDateValue(b)).getTime() - new Date(this.getDateValue(a)).getTime()
+        );
+
+        // Append time ago
+        // this.notificationsData = combined.map(item => {
+        //   'msg': return `${item.message} ${this.getTimeAgo(this.getDateValue(item))}`
+        //   'action': item.action_type
+        // });
+
+        // Append time ago
+        this.notificationsData = combined.map(item => {
+          return {
+            msg: `${item.message} ${this.getTimeAgo(this.getDateValue(item))}`,
+            action: item.action_type
+          };
+        });
+
+
+        console.log('this.notificationsData', this.notificationsData)
+
+
+        if (
+          this.sessionService.getItemFromLocal(
+            Resources.SessionStorageKeys.NotificationCountMakeZero
+          )
+        ) {
+          this.dynamicNotificationCount(this.UserDetails?.lastLoginDate);
+        }
+      },
+      (err) => {
+        console.error(err);
+        console.error(err);
+        this.notificationsData = [];
+        this.fetchingText = false;
+        if (
+          this.sessionService.getItemFromLocal(
+            Resources.SessionStorageKeys.NotificationCountMakeZero
+          )
+        ) {
+
+          this.dynamicNotificationCount(this.UserDetails?.lastLoginDate);
+        }
+      }
+    );
+  }
+
+
+  getDateValue(item: any): string {
+    return item.created_date || item.actionDate || item.createdAt || "";
+  }
+
+  // getTimeAgo(dateString: string): string {
+  //   const now = new Date();
+  //   const past = new Date(dateString);
+  //   const diffMs = now.getTime() - past.getTime();
+
+  //   const seconds = Math.floor(diffMs / 1000);
+  //   const minutes = Math.floor(seconds / 60);
+  //   const hours = Math.floor(minutes / 60);
+  //   const days = Math.floor(hours / 24);
+
+  //   if (days > 0) return `(${days}d)`;
+  //   if (hours > 0) return `(${hours}h)`;
+  //   if (minutes > 0) return `(${minutes}m)`;
+  //   return `(just now)`;
+  // }
+
+  getTimeAgo(dateString: string): string {
+
+    // console.log(dateString)
+    if (!dateString) return "";
+
+    const past = new Date(dateString);
+    if (isNaN(past.getTime())) return ""; // Invalid date, skip
+
+    const now = new Date();
+    const diffMs = now.getTime() - past.getTime();
+
+    const seconds = Math.floor(diffMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    // if (days > 0) return `(${days}d)`;
+    // if (hours > 0) return `(${hours}h)`;
+    // if (minutes > 0) return `(${minutes}m)`;
+    // return `(just now)`;
+
+    if (days > 0) return `(${days}d)`;
+    if (hours > 0) return `(${hours}h)`;
+    return `(${minutes}m)`; // always show minutes if < 1h
+
+  }
+
+
+  // getTimeAgo(dateString: string): string {
+  //   if (!dateString) return "";
+
+  //   // If no timezone offset in string, add +05:30
+  //   if (!/([Zz]|[+\-]\d{2}:\d{2})$/.test(dateString)) {
+  //     dateString += "+05:30";
+  //   }
+
+  //   // console.log("dateString", dateString);
+
+  //   const past = new Date(dateString);
+  //   if (isNaN(past.getTime())) return ""; // Invalid date
+
+  //   // Debug: show both UTC & Local
+  //   // console.log("Incoming:", dateString);
+  //   // console.log("Local:", past.toLocaleString());
+
+  //   const now = new Date();
+  //   const diffMs = now.getTime() - past.getTime();
+
+  //   const seconds = Math.floor(diffMs / 1000);
+  //   const minutes = Math.floor(seconds / 60);
+  //   const hours = Math.floor(minutes / 60);
+  //   const days = Math.floor(hours / 24);
+
+  //   if (days > 0) return `(${days}d)`;
+  //   if (hours > 0) return `(${hours}h)`;
+  //   if (minutes > 0) return `(${minutes}m)`;
+  //   return `(just now)`;
+  // }
+
+}

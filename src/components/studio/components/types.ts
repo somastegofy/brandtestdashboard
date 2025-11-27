@@ -34,61 +34,34 @@ export interface PageContentBlock {
 }
 
 // Header Component Types
+export type HeaderFontWeight = '400' | '500' | '600' | '700';
+export type HeaderAlignment = 'left' | 'center' | 'right';
+export type HeaderTextTransform = 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+export type HeaderLogoTextArrangement =
+  | 'top_bottom'
+  | 'bottom_top'
+  | 'left_right'
+  | 'right_left';
+
 export interface HeaderProps {
   logo?: {
     enabled: boolean;
-    src: string;
-    alt: string;
-    width: number;
-    height: number;
-    align: 'left' | 'center' | 'right';
+    src?: string;
+    alt?: string;
     link?: string;
     openInNewTab?: boolean;
   };
   text?: {
     enabled: boolean;
     content: string;
-    fontSize: string;
-    fontWeight: 'normal' | 'bold' | '600' | '700' | '800';
-    color: string;
-    align: 'left' | 'center' | 'right';
-    link?: string;
-    openInNewTab?: boolean;
-    fontFamily?: string;
-    letterSpacing?: string;
-    textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
-  };
-  navigation?: {
-    enabled: boolean;
-    items: Array<{
-      label: string;
-      link: string;
-      openInNewTab?: boolean;
-    }>;
-    align: 'left' | 'center' | 'right';
-  };
-  background?: {
-    color?: string;
-    image?: string;
-    opacity?: number;
+    fontWeight?: HeaderFontWeight;
+    align?: HeaderAlignment;
+    textTransform?: HeaderTextTransform;
   };
   sticky?: boolean;
   height?: string;
-  padding?: {
-    top: string;
-    bottom: string;
-    left: string;
-    right: string;
-  };
-  border?: {
-    enabled: boolean;
-    width: string;
-    color: string;
-    style: 'solid' | 'dashed' | 'dotted';
-  };
   layout?: {
-    logoTextSpacing?: string; // Spacing between logo and text when both are enabled
-    logoTextAlignment?: 'horizontal' | 'vertical'; // How logo and text are arranged
+    logoTextArrangement?: HeaderLogoTextArrangement;
   };
 }
 
@@ -113,28 +86,30 @@ export interface ImagesLinkProps {
   showDescriptions?: boolean;
   imageBorderRadius?: string;
   hoverEffect?: 'none' | 'zoom' | 'fade' | 'lift';
-  linkStyle?: 'button' | 'overlay' | 'entire-image';
+  cardTitle?: string;
+  cardDescription?: string;
+  contentDisplay?: 'overlay' | 'below' | 'above';
 }
 
 // Buttons Component Types
 export interface ButtonItem {
+  id: string;
   text: string;
+  title?: string;
+  titleAlign?: HeadingAlignmentOption;
+  titleFontWeight?: '400' | '500' | '600' | '700';
+  description?: string;
+  descriptionAlign?: BodyAlignmentOption;
+  descriptionFontWeight?: '400' | '500' | '600';
   link?: string;
-  style: 'primary' | 'secondary' | 'outline' | 'text' | 'custom';
-  size?: 'small' | 'medium' | 'large';
-  backgroundColor?: string;
-  textColor?: string;
-  borderColor?: string;
-  borderWidth?: string;
-  borderRadius?: string;
+  style: 'normal' | 'outline';
+  rounded?: boolean;
   fontWeight?: '400' | '500' | '600' | '700';
   disabled?: boolean;
   openInNewTab?: boolean;
   type?: 'button' | 'submit';
   icon?: string;
   iconPosition?: 'left' | 'right';
-  hoverBackgroundColor?: string;
-  hoverTextColor?: string;
 }
 
 export interface ButtonsProps {
@@ -147,32 +122,29 @@ export interface ButtonsProps {
 }
 
 // Heading+Text Component Types
+export type HeadingLevel = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+export type HeadingFontWeight = '400' | '500' | '600' | '700' | '800';
+export type BodyFontWeight = '400' | '500' | '600';
+export type HeadingTextTransform = 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+export type HeadingAlignmentOption = 'left' | 'center' | 'right';
+export type BodyAlignmentOption = 'left' | 'center' | 'right' | 'justify';
+export type HeadingTextSpacing = 'compact' | 'comfortable' | 'relaxed';
+
 export interface HeadingTextProps {
   heading: {
     text: string;
-    level: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
-    fontSize?: string;
-    fontWeight?: 'normal' | 'bold' | '600' | '700' | '800';
-    color?: string;
-    align?: 'left' | 'center' | 'right';
-    fontFamily?: string;
-    letterSpacing?: string;
-    textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
-    lineHeight?: string;
-    marginBottom?: string;
+    level: HeadingLevel;
+    fontWeight?: HeadingFontWeight;
+    align?: HeadingAlignmentOption;
+    textTransform?: HeadingTextTransform;
   };
   text: {
     content: string;
-    fontSize?: string;
-    fontWeight?: 'normal' | '400' | '500' | '600';
-    color?: string;
-    align?: 'left' | 'center' | 'right' | 'justify';
-    fontFamily?: string;
-    lineHeight?: string;
-    marginTop?: string;
+    fontWeight?: BodyFontWeight;
+    align?: BodyAlignmentOption;
   };
-  spacing?: string;
-  alignment?: 'left' | 'center' | 'right';
+  spacing?: HeadingTextSpacing;
+  alignment?: HeadingAlignmentOption;
 }
 
 // Video Component Types

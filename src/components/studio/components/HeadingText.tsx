@@ -62,8 +62,24 @@ export const HeadingTextComponent: React.FC<HeadingTextComponentProps> = ({
     marginTop: resolvedSpacing === '0' ? '0' : `calc(${resolvedSpacing} * 0.5)`
   };
 
+  const isHTML = (str: string) => {
+    if (!str) return false;
+    return /<[a-z][\s\S]*>/i.test(str);
+  };
+
   const renderBodyContent = () => {
     if (!text.content) return null;
+    
+    if (isHTML(text.content)) {
+      return (
+        <div
+          style={textStyle}
+          className="leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: text.content }}
+        />
+      );
+    }
+
     const paragraphs = text.content.split(/\n{2,}/).filter(Boolean);
 
     if (paragraphs.length <= 1) {
@@ -88,8 +104,12 @@ export const HeadingTextComponent: React.FC<HeadingTextComponentProps> = ({
   return (
     <div style={containerStyle} onClick={onClick} className="space-y-2">
       {heading.text && (
-        <HeadingTag style={headingStyle} className="leading-tight tracking-tight text-balance">
-          {heading.text}
+        <HeadingTag
+          style={headingStyle}
+          className="leading-tight tracking-tight text-balance"
+          dangerouslySetInnerHTML={isHTML(heading.text) ? { __html: heading.text } : undefined}
+        >
+          {!isHTML(heading.text) && heading.text}
         </HeadingTag>
       )}
       {renderBodyContent()}

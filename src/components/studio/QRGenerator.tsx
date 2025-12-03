@@ -9,7 +9,7 @@ export interface QRCustomization {
   eyeFrameColor: string;
   eyeBallColor: string;
   // Shapes
-  bodyShape: 'square' | 'dots' | 'rounded';
+  bodyShape: 'square' | 'dots' | 'rounded' | 'heart';
   eyeFrameShape: 'square' | 'rounded' | 'circle';
   eyeBallShape: 'square' | 'rounded' | 'circle';
   // Logo
@@ -51,6 +51,10 @@ export interface QRGeneratorProps {
   url: string;
   qrId?: string; // Existing QR ID to maintain stability
   existingCustomization?: QRCustomization;
+  /** When true, renders inline instead of fullscreen modal. */
+  embed?: boolean;
+  /** Optional initial CTA text under the QR when no existing customization. */
+  initialTextContent?: string;
   onGenerate: (qrData: {
     qrId: string;
     qrImagePng: string;
@@ -65,6 +69,8 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
   url,
   qrId,
   existingCustomization,
+  embed = false,
+  initialTextContent,
   onGenerate,
   onClose
 }) => {
@@ -72,32 +78,41 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
   const previewRef = useRef<HTMLDivElement>(null);
   const [customization, setCustomization] = useState<QRCustomization>(
     existingCustomization || {
+      // Colors
       foregroundColor: '#000000',
       backgroundColor: '#FFFFFF',
       eyeFrameColor: '#000000',
       eyeBallColor: '#000000',
+      // Shapes
       bodyShape: 'square',
       eyeFrameShape: 'square',
       eyeBallShape: 'square',
-      logoEnabled: false,
+      // Logo
+      logoEnabled: true,
       logoUrl: '',
       logoSize: 20,
       logoMargin: 4,
       logoBackgroundColor: '#FFFFFF',
       logoCornerRadius: 0,
-      frameEnabled: false,
-      frameType: 'none',
+      // Frame
+      frameEnabled: true,
+      frameType: 'rounded',
       frameColor: '#000000',
       frameWidth: 4,
       frameMargin: 20,
       framePadding: 10,
-      textEnabled: false,
-      textContent: 'Scan Me',
+      // Text
+      textEnabled: true,
+      textContent: initialTextContent || 'Scan Me',
       textPosition: 'bottom',
       textColor: '#000000',
       textSize: 16,
       textFont: 'Arial',
+      // Design
       designPattern: 'default',
+      gradientColor1: undefined,
+      gradientColor2: undefined,
+      // Error correction & size
       errorCorrectionLevel: 'M',
       size: 512,
       margin: 4
@@ -339,16 +354,19 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
     setCustomization(prev => ({ ...prev, [key]: value }));
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+  const containerClassName = embed
+    ? 'bg-white rounded-lg shadow-xl w-full flex flex-col'
+    : 'bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col';
+
+  const content = (
+    <div className={containerClassName}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">QR Code Generator</h2>
             <p className="text-sm text-gray-600 mt-1">Customize your QR code with colors, logos, frames, and more</p>
           </div>
-          {onClose && (
+          {!embed && onClose && (
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -362,25 +380,39 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
         {/* Main Content */}
         <div className="flex-1 overflow-hidden flex">
           {/* Left Panel - Preview */}
-          <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
+          <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
             <div className="sticky top-0">
-              <div className="bg-white rounded-lg shadow-lg p-6 flex flex-col items-center">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Preview</h3>
+              <div className="bg-white rounded-lg shadow-lg p-8 flex flex-col items-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">Preview</h3>
                 
                 {/* QR Code Preview */}
                 <div 
                   ref={previewRef}
-                  className="bg-white p-8 rounded-lg border-2 border-gray-200 shadow-inner mb-4"
+                  className="bg-white p-6 shadow-inner mb-4 flex items-center justify-center"
                   style={{ 
                     minHeight: `${customization.size + (customization.textEnabled ? 60 : 0)}px`,
-                    minWidth: `${customization.size}px`
+                    minWidth: `${customization.size}px`,
+                    borderWidth: customization.frameEnabled ? customization.frameWidth : 2,
+                    borderStyle: customization.frameEnabled && customization.frameType === 'dots' ? 'dotted' : 'solid',
+                    borderColor: customization.frameEnabled ? customization.frameColor : '#E5E7EB',
+                    borderRadius:
+                      customization.bodyShape === 'rounded'
+                        ? 24
+                        : customization.bodyShape === 'dots'
+                        ? 9999
+                        : 12,
+                    padding: customization.frameEnabled ? customization.framePadding : 16,
+                    clipPath:
+                      customization.bodyShape === 'heart'
+                        ? 'path("M 24 4 C 20 -2 10 -2 6 4 C 0 12 8 20 24 32 C 40 20 48 12 42 4 C 38 -2 28 -2 24 4 Z")'
+                        : undefined
                   }}
                 >
                   {previewImage ? (
-                    <>
+                    <div className="flex flex-col items-center justify-center w-full">
                       {customization.textEnabled && customization.textPosition === 'top' && (
                         <div 
-                          className="text-center mb-4"
+                          className="mb-2 text-center"
                           style={{
                             color: customization.textColor,
                             fontSize: `${customization.textSize}px`,
@@ -391,16 +423,30 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
                           {customization.textContent}
                         </div>
                       )}
-                      <div className="flex justify-center">
+                      <div className="flex justify-center w-full">
                         <img 
                           src={previewImage} 
                           alt="QR Code Preview" 
                           className="max-w-full h-auto"
+                          style={{
+                            minWidth: '300px',
+                            minHeight: '300px',
+                            borderRadius:
+                              customization.bodyShape === 'rounded'
+                                ? 24
+                                : customization.bodyShape === 'dots'
+                                ? 9999
+                                : 0,
+                            clipPath:
+                              customization.bodyShape === 'heart'
+                                ? 'path("M 24 4 C 20 -2 10 -2 6 4 C 0 12 8 20 24 32 C 40 20 48 12 42 4 C 38 -2 28 -2 24 4 Z")'
+                                : undefined
+                          }}
                         />
                       </div>
                       {customization.textEnabled && customization.textPosition === 'bottom' && (
                         <div 
-                          className="text-center mt-4"
+                          className="mt-2 text-center"
                           style={{
                             color: customization.textColor,
                             fontSize: `${customization.textSize}px`,
@@ -411,7 +457,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
                           {customization.textContent}
                         </div>
                       )}
-                    </>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-64 text-gray-400">
                       {isGenerating ? (
@@ -526,10 +572,10 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
             </div>
 
             {/* Tab Content */}
-            <div className="p-6 space-y-6">
+            <div className="p-8 space-y-8">
               {/* Colors Tab */}
               {activeTab === 'design' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <h3 className="text-sm font-semibold text-gray-900">Colors</h3>
                   
                   <div>
@@ -616,15 +662,62 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
                     <label className="block text-xs font-medium text-gray-700 mb-2">
                       Body Shape
                     </label>
-                    <select
-                      value={customization.bodyShape}
-                      onChange={(e) => updateCustomization('bodyShape', e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="square">Square</option>
-                      <option value="dots">Dots</option>
-                      <option value="rounded">Rounded</option>
-                    </select>
+                    <div className="grid grid-cols-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateCustomization('bodyShape', 'square')}
+                        className={`px-2 py-2 text-xs border rounded-lg flex flex-col items-center ${
+                          customization.bodyShape === 'square'
+                            ? 'border-blue-500 text-blue-600 bg-blue-50'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="w-5 h-5 bg-gray-900 rounded-sm mb-1" />
+                        Square
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateCustomization('bodyShape', 'rounded')}
+                        className={`px-2 py-2 text-xs border rounded-lg flex flex-col items-center ${
+                          customization.bodyShape === 'rounded'
+                            ? 'border-blue-500 text-blue-600 bg-blue-50'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="w-5 h-5 bg-gray-900 rounded-xl mb-1" />
+                        Rounded
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateCustomization('bodyShape', 'dots')}
+                        className={`px-2 py-2 text-xs border rounded-lg flex flex-col items-center ${
+                          customization.bodyShape === 'dots'
+                            ? 'border-blue-500 text-blue-600 bg-blue-50'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="w-5 h-5 bg-gray-900 rounded-full mb-1" />
+                        Circle
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateCustomization('bodyShape', 'heart')}
+                        className={`px-2 py-2 text-xs border rounded-lg flex flex-col items-center ${
+                          customization.bodyShape === 'heart'
+                            ? 'border-pink-500 text-pink-600 bg-pink-50'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span
+                          className="w-5 h-5 bg-pink-500 mb-1"
+                          style={{
+                            clipPath:
+                              'path("M 24 4 C 20 -2 10 -2 6 4 C 0 12 8 20 24 32 C 40 20 48 12 42 4 C 38 -2 28 -2 24 4 Z")'
+                          }}
+                        />
+                        Heart
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -663,226 +756,235 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
 
               {/* Logo Tab */}
               {activeTab === 'logo' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <h3 className="text-sm font-semibold text-gray-900">Logo</h3>
                   
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-gray-700">Enable Logo</label>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Quick Logos
+                    </label>
+                    <div className="flex space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const demoUrl = 'https://via.placeholder.com/200x200.png?text=Brand';
+                          setLogoPreview(demoUrl);
+                          setCustomization(prev => ({
+                            ...prev,
+                            logoEnabled: true,
+                            logoUrl: demoUrl
+                          }));
+                        }}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-xs hover:bg-gray-50"
+                      >
+                        Simple Brand Logo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const demoUrl = 'https://via.placeholder.com/200x200.png?text=Logo';
+                          setLogoPreview(demoUrl);
+                          setCustomization(prev => ({
+                            ...prev,
+                            logoEnabled: true,
+                            logoUrl: demoUrl
+                          }));
+                        }}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-xs hover:bg-gray-50"
+                      >
+                        Text Logo
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Upload Logo
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <label className="flex-1 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition-colors text-center">
+                        <Upload className="w-4 h-4 mx-auto mb-1 text-gray-400" />
+                        <span className="text-xs text-gray-600">Upload Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    {logoPreview && (
+                      <div className="mt-2 p-2 border border-gray-200 rounded-lg">
+                        <img src={logoPreview} alt="Logo preview" className="w-16 h-16 object-contain mx-auto" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Logo Size: {customization.logoSize}%
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={customization.logoEnabled}
-                      onChange={(e) => updateCustomization('logoEnabled', e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      type="range"
+                      min="10"
+                      max="50"
+                      value={customization.logoSize}
+                      onChange={(e) => updateCustomization('logoSize', parseInt(e.target.value))}
+                      className="w-full"
                     />
                   </div>
 
-                  {customization.logoEnabled && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Upload Logo
-                        </label>
-                        <div className="flex items-center space-x-2">
-                          <label className="flex-1 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition-colors text-center">
-                            <Upload className="w-4 h-4 mx-auto mb-1 text-gray-400" />
-                            <span className="text-xs text-gray-600">Upload Image</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleLogoUpload}
-                              className="hidden"
-                            />
-                          </label>
-                        </div>
-                        {logoPreview && (
-                          <div className="mt-2 p-2 border border-gray-200 rounded-lg">
-                            <img src={logoPreview} alt="Logo preview" className="w-16 h-16 object-contain mx-auto" />
-                          </div>
-                        )}
-                      </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Logo Margin: {customization.logoMargin}px
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="20"
+                      value={customization.logoMargin}
+                      onChange={(e) => updateCustomization('logoMargin', parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Logo Size: {customization.logoSize}%
-                        </label>
-                        <input
-                          type="range"
-                          min="10"
-                          max="50"
-                          value={customization.logoSize}
-                          onChange={(e) => updateCustomization('logoSize', parseInt(e.target.value))}
-                          className="w-full"
-                        />
-                      </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Logo Background Color
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="color"
+                        value={customization.logoBackgroundColor}
+                        onChange={(e) => updateCustomization('logoBackgroundColor', e.target.value)}
+                        className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={customization.logoBackgroundColor}
+                        onChange={(e) => updateCustomization('logoBackgroundColor', e.target.value)}
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
 
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Logo Margin: {customization.logoMargin}px
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="20"
-                          value={customization.logoMargin}
-                          onChange={(e) => updateCustomization('logoMargin', parseInt(e.target.value))}
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Logo Background Color
-                        </label>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="color"
-                            value={customization.logoBackgroundColor}
-                            onChange={(e) => updateCustomization('logoBackgroundColor', e.target.value)}
-                            className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
-                          />
-                          <input
-                            type="text"
-                            value={customization.logoBackgroundColor}
-                            onChange={(e) => updateCustomization('logoBackgroundColor', e.target.value)}
-                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Logo Corner Radius: {customization.logoCornerRadius}px
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="20"
-                          value={customization.logoCornerRadius}
-                          onChange={(e) => updateCustomization('logoCornerRadius', parseInt(e.target.value))}
-                          className="w-full"
-                        />
-                      </div>
-                    </>
-                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Logo Corner Radius: {customization.logoCornerRadius}px
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="20"
+                      value={customization.logoCornerRadius}
+                      onChange={(e) => updateCustomization('logoCornerRadius', parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
                 </div>
               )}
 
               {/* Frame Tab */}
               {activeTab === 'frame' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <h3 className="text-sm font-semibold text-gray-900">Frame</h3>
                   
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-gray-700">Enable Frame</label>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Frame Type
+                    </label>
+                    <select
+                      value={customization.frameType}
+                      onChange={(e) => updateCustomization('frameType', e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="border">Border</option>
+                      <option value="rounded">Rounded Border</option>
+                      <option value="dots">Dotted Border</option>
+                      <option value="squares">Square Border</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Frame Color
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="color"
+                        value={customization.frameColor}
+                        onChange={(e) => updateCustomization('frameColor', e.target.value)}
+                        className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={customization.frameColor}
+                        onChange={(e) => updateCustomization('frameColor', e.target.value)}
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Frame Width: {customization.frameWidth}px
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={customization.frameEnabled}
-                      onChange={(e) => updateCustomization('frameEnabled', e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={customization.frameWidth}
+                      onChange={(e) => updateCustomization('frameWidth', parseInt(e.target.value))}
+                      className="w-full"
                     />
                   </div>
 
-                  {customization.frameEnabled && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Frame Type
-                        </label>
-                        <select
-                          value={customization.frameType}
-                          onChange={(e) => updateCustomization('frameType', e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="none">None</option>
-                          <option value="border">Border</option>
-                          <option value="rounded">Rounded Border</option>
-                          <option value="dots">Dotted Border</option>
-                          <option value="squares">Square Border</option>
-                        </select>
-                      </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Frame Margin: {customization.frameMargin}px
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="50"
+                      value={customization.frameMargin}
+                      onChange={(e) => updateCustomization('frameMargin', parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Frame Color
-                        </label>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="color"
-                            value={customization.frameColor}
-                            onChange={(e) => updateCustomization('frameColor', e.target.value)}
-                            className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
-                          />
-                          <input
-                            type="text"
-                            value={customization.frameColor}
-                            onChange={(e) => updateCustomization('frameColor', e.target.value)}
-                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                      </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Frame Padding: {customization.framePadding}px
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="30"
+                      value={customization.framePadding}
+                      onChange={(e) => updateCustomization('framePadding', parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
 
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Frame Width: {customization.frameWidth}px
-                        </label>
-                        <input
-                          type="range"
-                          min="1"
-                          max="20"
-                          value={customization.frameWidth}
-                          onChange={(e) => updateCustomization('frameWidth', parseInt(e.target.value))}
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Frame Margin: {customization.frameMargin}px
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="50"
-                          value={customization.frameMargin}
-                          onChange={(e) => updateCustomization('frameMargin', parseInt(e.target.value))}
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Frame Padding: {customization.framePadding}px
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="30"
-                          value={customization.framePadding}
-                          onChange={(e) => updateCustomization('framePadding', parseInt(e.target.value))}
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          Frame Label (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={customization.frameLabel || ''}
-                          onChange={(e) => updateCustomization('frameLabel', e.target.value)}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          placeholder="e.g., Scan Here"
-                        />
-                      </div>
-                    </>
-                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Frame Label (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={customization.frameLabel || ''}
+                      onChange={(e) => updateCustomization('frameLabel', e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., Scan Here"
+                    />
+                  </div>
                 </div>
               )}
 
               {/* Text Tab */}
               {activeTab === 'text' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <h3 className="text-sm font-semibold text-gray-900">Text</h3>
                   
                   <div className="flex items-center justify-between">
@@ -983,7 +1085,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
 
               {/* Advanced Tab */}
               {activeTab === 'advanced' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <h3 className="text-sm font-semibold text-gray-900">Advanced Settings</h3>
                   
                   <div>
@@ -1080,7 +1182,16 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
 
         {/* Hidden Canvas for QR Generation */}
         <canvas ref={canvasRef} style={{ display: 'none' }} />
-      </div>
+    </div>
+  );
+
+  if (embed) {
+    return content;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      {content}
     </div>
   );
 };

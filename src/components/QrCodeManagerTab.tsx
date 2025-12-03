@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   QrCode as QrCodeIcon, 
   Search, 
@@ -26,6 +26,7 @@ import { Product } from '../types/productTypes';
 import AllCodesView from './qr_codes/AllCodesView';
 import QrCustomizationTab from './qr_codes/QrCustomizationTab';
 import QrSettingsTab from './qr_codes/QrSettingsTab';
+import { getCurrentUserQRCodes, QRCode as DbQRCode } from '../api/qrCodes';
 
 interface QrCodeManagerTabProps {
   products: Product[];
@@ -35,189 +36,78 @@ const QrCodeManagerTab: React.FC<QrCodeManagerTabProps> = ({ products }) => {
   const [activeSubTab, setActiveSubTab] = useState<'all-codes' | 'products-qr' | 'studio-pages-qr' | 'customization' | 'settings'>('all-codes');
   const [selectedQrCode, setSelectedQrCode] = useState<QrCode | null>(null);
 
-  // Sample Studio Pages data
-  const [studioPages] = useState<StudioPage[]>([
-    {
-      id: 'studio-1',
-      title: 'Organic Honey Brand Story',
-      type: 'Brand Story',
-      url: '/studio/organic-honey-story',
-      status: 'Published',
-      createdAt: '2024-01-15T10:30:00Z'
-    },
-    {
-      id: 'studio-2',
-      title: 'Premium Tea Landing Page',
-      type: 'Landing Page',
-      url: '/studio/premium-tea-landing',
-      status: 'Published',
-      createdAt: '2024-01-18T09:15:00Z'
-    },
-    {
-      id: 'studio-3',
-      title: 'Sustainability Initiative',
-      type: 'Landing Page',
-      url: '/studio/sustainability',
-      status: 'Draft',
-      createdAt: '2024-01-20T14:30:00Z'
-    }
-  ]);
+  // Studio pages can be wired from Supabase later – keep empty for now
+  const [studioPages] = useState<StudioPage[]>([]);
 
-  // Default QR customization
+  // Default QR customization aligned with QRGenerator
   const defaultCustomization: QrCustomization = {
-    template: 'default',
-    shapes: {
-      body: 'square',
-      eyeFrame: 'square',
-      eyeball: 'square'
-    },
-    colors: {
-      body: '#000000',
-      stroke: '#000000',
-      eyeOuter: '#000000',
-      eyeInner: '#000000'
-    },
-    logo: {
-      enabled: false,
-      scale: 0.2,
-      position: 'center',
-      removePadding: false
-    },
-    text: {
-      enabled: false,
-      content: 'Scan Me!',
-      font: 'Arial',
-      size: 14,
-      color: '#000000',
-      position: 'bottom'
-    },
-    stickers: {
-      enabled: false,
-      type: 'none',
-      position: 'corner'
-    },
-    advanced: {
-      cornerPadding: 10,
-      effect3d: false,
-      errorCorrection: 'M'
-    }
+    foregroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
+    eyeFrameColor: '#000000',
+    eyeBallColor: '#000000',
+    bodyShape: 'square',
+    eyeFrameShape: 'square',
+    eyeBallShape: 'square',
+    logoEnabled: false,
+    logoUrl: '',
+    logoSize: 20,
+    logoMargin: 4,
+    logoBackgroundColor: '#FFFFFF',
+    logoCornerRadius: 0,
+    frameEnabled: false,
+    frameType: 'none',
+    frameColor: '#000000',
+    frameWidth: 4,
+    frameMargin: 20,
+    framePadding: 10,
+    textEnabled: true,
+    textContent: 'Scan Me',
+    textPosition: 'bottom',
+    textColor: '#000000',
+    textSize: 16,
+    textFont: 'Arial',
+    designPattern: 'default',
+    gradientColor1: undefined,
+    gradientColor2: undefined,
+    errorCorrectionLevel: 'M',
+    size: 512,
+    margin: 4
   };
 
-  // Sample QR Codes data
-  const [qrCodes, setQrCodes] = useState<QrCode[]>([
-    {
-      id: 'qr-1',
-      name: 'Organic Honey 500g QR',
-      type: 'Product QR',
-      linkedTo: 'Organic Honey 500g',
-      linkedId: '1',
-      status: 'Linked to Custom Page',
-      dateCreated: '2024-01-15T10:30:00Z',
-      lastUpdated: '2024-01-20T14:30:00Z',
-      totalScans: 1247,
-      customization: {
-        ...defaultCustomization,
-        colors: {
-          ...defaultCustomization.colors,
-          body: '#10B981'
-        },
-        logo: {
-          ...defaultCustomization.logo,
-          enabled: true,
-          url: 'https://images.pexels.com/photos/1638280/pexels-photo-1638280.jpeg'
-        }
-      },
-      url: '/product/organic-honey-500g-123456',
-      previewImage: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://stegofy.com/product/organic-honey-500g-123456&color=10B981'
-    },
-    {
-      id: 'qr-2',
-      name: 'Premium Green Tea QR',
-      type: 'Product QR',
-      linkedTo: 'Premium Green Tea 250g',
-      linkedId: '2',
-      status: 'Using Default View',
-      dateCreated: '2024-01-18T09:15:00Z',
-      lastUpdated: '2024-01-18T09:15:00Z',
-      totalScans: 892,
-      customization: defaultCustomization,
-      url: '/product/premium-green-tea-250g-789012',
-      previewImage: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://stegofy.com/product/premium-green-tea-250g-789012'
-    },
-    {
-      id: 'qr-3',
-      name: 'Brand Story Landing QR',
-      type: 'Studio Page QR',
-      linkedTo: 'Organic Honey Brand Story',
-      linkedId: 'studio-1',
-      status: 'Linked to Custom Page',
-      dateCreated: '2024-01-15T16:45:00Z',
-      lastUpdated: '2024-01-19T11:20:00Z',
-      totalScans: 567,
-      customization: {
-        ...defaultCustomization,
-        colors: {
-          ...defaultCustomization.colors,
-          body: '#3B82F6'
-        },
-        text: {
-          ...defaultCustomization.text,
-          enabled: true,
-          content: 'Learn Our Story'
-        }
-      },
-      url: '/studio/organic-honey-story',
-      previewImage: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://stegofy.com/studio/organic-honey-story&color=3B82F6'
-    },
-    {
-      id: 'qr-4',
-      name: 'Sustainability Page QR',
-      type: 'Studio Page QR',
-      linkedTo: 'Sustainability Initiative',
-      linkedId: 'studio-3',
-      status: 'Using Default View',
-      dateCreated: '2024-01-20T14:30:00Z',
-      lastUpdated: '2024-01-20T14:30:00Z',
-      totalScans: 234,
-      customization: {
-        ...defaultCustomization,
-        colors: {
-          ...defaultCustomization.colors,
-          body: '#059669'
-        },
-        shapes: {
-          ...defaultCustomization.shapes,
-          body: 'rounded'
-        }
-      },
-      url: '/studio/sustainability',
-      previewImage: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://stegofy.com/studio/sustainability&color=059669'
-    },
-    {
-      id: 'qr-5',
-      name: 'Custom Promotional QR',
-      type: 'Custom QR',
-      linkedTo: 'External Website',
-      status: 'Using Default View',
-      dateCreated: '2024-01-22T11:15:00Z',
-      lastUpdated: '2024-01-22T11:15:00Z',
-      totalScans: 89,
-      customization: {
-        ...defaultCustomization,
-        colors: {
-          ...defaultCustomization.colors,
-          body: '#F59E0B'
-        },
-        text: {
-          ...defaultCustomization.text,
-          enabled: true,
-          content: 'Visit Website'
-        }
-      },
-      url: 'https://example.com',
-      previewImage: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com&color=F59E0B'
-    }
-  ]);
+  // Start with no static QR codes – user can create their own
+  const [qrCodes, setQrCodes] = useState<QrCode[]>([]);
+
+  // Load existing QR codes for this brand/user on mount
+  const hasLoadedRef = useRef(false);
+  useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+
+    const loadQRCodes = async () => {
+      try {
+        const dbQRCodes: DbQRCode[] = await getCurrentUserQRCodes();
+        const mapped: QrCode[] = dbQRCodes.map((qr) => ({
+          id: qr.id,
+          name: qr.name,
+          type: 'Custom QR',
+          linkedTo: 'Custom Link',
+          linkedId: undefined,
+          status: 'Linked to Custom Page',
+          dateCreated: qr.created_at,
+          lastUpdated: qr.updated_at,
+          totalScans: qr.total_scans,
+          customization: qr.customization as unknown as QrCustomization,
+          url: qr.url,
+          previewImage: qr.qr_image_png || qr.qr_image_svg || qr.qr_image_jpeg || '',
+        }));
+        setQrCodes(mapped);
+      } catch (error) {
+        console.error('Failed to load QR codes for current user:', error);
+      }
+    };
+
+    loadQRCodes();
+  }, []);
 
   // QR Settings state
   const [qrSettings, setQrSettings] = useState<QrSettings>({
@@ -259,14 +149,14 @@ const QrCodeManagerTab: React.FC<QrCodeManagerTabProps> = ({ products }) => {
       id: `qr-${Date.now()}`,
       name: 'New QR Code',
       type: 'Custom QR',
-      linkedTo: 'Not Linked',
-      status: 'Using Default View',
+      linkedTo: 'Custom Link',
+      status: 'Linked to Custom Page',
       dateCreated: new Date().toISOString(),
       lastUpdated: new Date().toISOString(),
       totalScans: 0,
       customization: defaultCustomization,
-      url: 'https://stegofy.com',
-      previewImage: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://stegofy.com'
+      url: '',
+      previewImage: ''
     };
     setQrCodes(prev => [newQrCode, ...prev]);
     setSelectedQrCode(newQrCode);

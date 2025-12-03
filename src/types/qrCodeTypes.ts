@@ -1,3 +1,7 @@
+import type { QRCustomization } from '../components/studio/QRGenerator';
+
+export type QrCustomization = QRCustomization;
+
 export interface QrCode {
   id: string;
   name: string;
@@ -11,47 +15,6 @@ export interface QrCode {
   customization: QrCustomization;
   url: string;
   previewImage: string;
-}
-
-export interface QrCustomization {
-  template: string;
-  shapes: {
-    body: 'square' | 'circle' | 'rounded' | 'dots';
-    eyeFrame: 'square' | 'circle' | 'rounded';
-    eyeball: 'square' | 'circle' | 'rounded';
-  };
-  colors: {
-    body: string;
-    bodyGradient?: string;
-    stroke: string;
-    eyeOuter: string;
-    eyeInner: string;
-  };
-  logo: {
-    enabled: boolean;
-    url?: string;
-    scale: number;
-    position: 'center' | 'corner';
-    removePadding: boolean;
-  };
-  text: {
-    enabled: boolean;
-    content: string;
-    font: string;
-    size: number;
-    color: string;
-    position: 'top' | 'bottom' | 'left' | 'right';
-  };
-  stickers: {
-    enabled: boolean;
-    type: string;
-    position: string;
-  };
-  advanced: {
-    cornerPadding: number;
-    effect3d: boolean;
-    errorCorrection: 'L' | 'M' | 'Q' | 'H';
-  };
 }
 
 export interface QrTemplate {

@@ -20,6 +20,7 @@ export interface QRCode {
   total_scans: number;
   created_at: string;
   updated_at: string;
+  owner_id?: string | null;
 }
 
 export interface SaveQRCodeParams {
@@ -58,6 +59,11 @@ export async function saveQRCode(
   qrCodeId: string | null,
   params: SaveQRCodeParams
 ): Promise<QRCode> {
+  // Attach current authenticated user as owner if available
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const qrData = {
     name: params.name,
     url: params.url,
@@ -73,6 +79,7 @@ export async function saveQRCode(
     error_correction_level: params.customization.errorCorrectionLevel || 'M',
     size: params.customization.size || 256,
     margin: params.customization.margin || 4,
+    owner_id: user?.id || null,
   };
 
   // Only use qrCodeId if it's a valid UUID, otherwise treat as new QR code
@@ -224,6 +231,28 @@ export async function getAllQRCodes(): Promise<QRCode[]> {
   const { data, error } = await supabase
     .from('qr_codes')
     .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Get all QR codes that belong to the currently authenticated user/brand.
+ */
+export async function getCurrentUserQRCodes(): Promise<QRCode[]> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) throw userError;
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('qr_codes')
+    .select('*')
+    .eq('owner_id', user.id)
     .order('created_at', { ascending: false });
 
   if (error) throw error;

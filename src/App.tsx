@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ProductsTab from './components/ProductsTab';
 import StudioTab from './components/StudioTab';
@@ -11,6 +11,8 @@ import ConsumersTab from './components/ConsumersTab';
 import BuyerSourceProofTab from './components/BuyerSourceProofTab';
 import ReviewsManagerTab from './components/ReviewsManagerTab';
 import SubmissionDetailsModal from './components/SubmissionDetailsModal';
+import BrandLogin from './components/auth/BrandLogin';
+import BrandSignup from './components/auth/BrandSignup';
 import PublishedPageViewer from './components/PublishedPageViewer';
 import QRScanRedirect from './components/QRScanRedirect';
 import SettingsTab from './components/SettingsTab';
@@ -19,6 +21,76 @@ import SupportInboxTab from './components/SupportInboxTab';
 import FileManagerTab from './components/FileManagerTab';
 import { Submission } from './types/buyerSourceTypes';
 import { Product, SAMPLE_CATEGORIES, CategoryHierarchy } from './types/productTypes';
+import { supabase } from './lib/supabase';
+import type { Session } from '@supabase/supabase-js';
+
+const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
+      setSession(data.session);
+      setLoading(false);
+    });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">
+        Checking session...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/auth/login" replace state={{ from: location }} />;
+  }
+
+  return children;
+};
+
+const AuthRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+
+  useEffect(() => {
+    let isMounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return;
+      setSession(data.session);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (session === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">
+        Checking session...
+      </div>
+    );
+  }
+
+  if (session) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+};
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -438,42 +510,67 @@ function App() {
   return (
     <Router>
       <Routes>
+        {/* Auth Routes */}
+        <Route
+          path="/auth/login"
+          element={
+            <AuthRoute>
+              <BrandLogin />
+            </AuthRoute>
+          }
+        />
+        <Route
+          path="/auth/signup"
+          element={
+            <AuthRoute>
+              <BrandSignup />
+            </AuthRoute>
+          }
+        />
+
         {/* QR Scan Redirect Route */}
         <Route path="/qr/:qrId" element={<QRScanRedirect />} />
         
         {/* Published Page Route */}
         <Route path="/published-product/:slug" element={<PublishedPageViewer />} />
         
-        {/* Main Application Route */}
-        <Route path="/*" element={
-          <div className="min-h-screen bg-gray-50">
-            <Sidebar 
-              activeTab={activeTab} 
-              onTabChange={setActiveTab}
-              isCollapsed={isSidebarCollapsed}
-              onToggleCollapse={toggleSidebar}
-            />
-            
-            <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
-              <main className="min-h-screen">
-                {renderContent()}
-              </main>
-            </div>
-            
-            {/* Shared Submission Details Modal */}
-            <SubmissionDetailsModal
-              submission={selectedSubmissionForModal}
-              isOpen={showSharedSubmissionDetailsModal}
-              onClose={closeSharedSubmissionDetailsModal}
-              onApprove={handleApproveSubmission}
-              onReject={handleRejectSubmission}
-              onNavigate={navigateSubmission}
-              currentIndex={currentSubmissionIndex}
-              totalCount={filteredSubmissionsForModal.length}
-              canNavigate={filteredSubmissionsForModal.length > 1}
-            />
-          </div>
-        } />
+        {/* Main Application Route (protected) */}
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <div className="min-h-screen bg-gray-50">
+                <Sidebar
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  isCollapsed={isSidebarCollapsed}
+                  onToggleCollapse={toggleSidebar}
+                />
+
+                <div
+                  className={`transition-all duration-300 ${
+                    isSidebarCollapsed ? 'ml-20' : 'ml-64'
+                  }`}
+                >
+                  <main className="min-h-screen">{renderContent()}</main>
+                </div>
+
+                {/* Shared Submission Details Modal */}
+                <SubmissionDetailsModal
+                  submission={selectedSubmissionForModal}
+                  isOpen={showSharedSubmissionDetailsModal}
+                  onClose={closeSharedSubmissionDetailsModal}
+                  onApprove={handleApproveSubmission}
+                  onReject={handleRejectSubmission}
+                  onNavigate={navigateSubmission}
+                  currentIndex={currentSubmissionIndex}
+                  totalCount={filteredSubmissionsForModal.length}
+                  canNavigate={filteredSubmissionsForModal.length > 1}
+                />
+              </div>
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Router>
   );

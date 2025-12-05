@@ -26,7 +26,7 @@ import { Product } from '../types/productTypes';
 import AllCodesView from './qr_codes/AllCodesView';
 import QrCustomizationTab from './qr_codes/QrCustomizationTab';
 import QrSettingsTab from './qr_codes/QrSettingsTab';
-import { getCurrentUserQRCodes, QRCode as DbQRCode } from '../api/qrCodes';
+import { getCurrentUserQRCodes, QRCode as DbQRCode, deleteQRCode } from '../api/qrCodes';
 
 interface QrCodeManagerTabProps {
   products: Product[];
@@ -140,8 +140,14 @@ const QrCodeManagerTab: React.FC<QrCodeManagerTabProps> = ({ products }) => {
     setQrCodes(prev => prev.map(qr => qr.id === updatedQrCode.id ? updatedQrCode : qr));
   };
 
-  const handleQrCodeDelete = (qrCodeId: string) => {
-    setQrCodes(prev => prev.filter(qr => qr.id !== qrCodeId));
+  const handleQrCodeDelete = async (qrCodeId: string) => {
+    try {
+      await deleteQRCode(qrCodeId);
+      setQrCodes(prev => prev.filter(qr => qr.id !== qrCodeId));
+    } catch (error) {
+      console.error('Failed to delete QR code:', error);
+      alert('Failed to delete QR code. Please try again.');
+    }
   };
 
   const handleCreateNewQr = () => {

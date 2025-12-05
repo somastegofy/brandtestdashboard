@@ -259,3 +259,18 @@ export async function getCurrentUserQRCodes(): Promise<QRCode[]> {
   return data || [];
 }
 
+export async function deleteQRCode(qrCodeId: string): Promise<void> {
+  const { error: linkError } = await supabase
+    .from('studio_page_links')
+    .delete()
+    .eq('qr_code_id', qrCodeId);
+
+  if (linkError) throw linkError;
+
+  const { error } = await supabase
+    .from('qr_codes')
+    .delete()
+    .eq('id', qrCodeId);
+
+  if (error) throw error;
+}

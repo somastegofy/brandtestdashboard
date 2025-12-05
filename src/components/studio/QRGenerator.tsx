@@ -18,6 +18,11 @@ export interface QRCustomization {
   logoSize: number; // 0-50 (percentage)
   logoMargin: number; // pixels around logo
   logoBackgroundColor: string;
+  logoBackgroundShape?: 'none' | 'square' | 'rounded' | 'circle';
+  logoClearArea?: boolean;
+  logoTintEnabled?: boolean;
+  logoTintColor?: string;
+  logoTintOpacity?: number;
   logoCornerRadius: number;
   // Frame
   frameEnabled: boolean;
@@ -93,6 +98,11 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
       logoSize: 20,
       logoMargin: 4,
       logoBackgroundColor: '#FFFFFF',
+      logoBackgroundShape: 'circle',
+      logoClearArea: true,
+      logoTintEnabled: false,
+      logoTintColor: '#000000',
+      logoTintOpacity: 1,
       logoCornerRadius: 0,
       // Frame
       frameEnabled: true,
@@ -165,31 +175,105 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
 
       ctx.drawImage(qrImage, margin, margin);
 
-      // Apply logo if enabled
-      if (customization.logoEnabled && customization.logoUrl) {
-        const logoImg = new Image();
-        logoImg.crossOrigin = 'anonymous';
-        await new Promise((resolve, reject) => {
-          logoImg.onload = resolve;
-          logoImg.onerror = reject;
-          logoImg.src = customization.logoUrl;
-        });
+      
 
+      // Apply logo area and optional logo
+      if (customization.logoEnabled) {
         const logoSize = (size - (margin * 2)) * (customization.logoSize / 100);
         const logoX = (size - logoSize) / 2;
         const logoY = (size - logoSize) / 2;
-
-        // Draw logo background if needed
-        if (customization.logoBackgroundColor !== customization.backgroundColor) {
-          ctx.fillStyle = customization.logoBackgroundColor;
-          const logoBgSize = logoSize + (customization.logoMargin * 2);
-          const logoBgX = (size - logoBgSize) / 2;
-          const logoBgY = (size - logoBgSize) / 2;
-          ctx.fillRect(logoBgX, logoBgY, logoBgSize, logoBgSize);
+        let logoSource: CanvasImageSource | null = null;
+        if (customization.logoUrl) {
+          const logoImg = new Image();
+          logoImg.crossOrigin = 'anonymous';
+          await new Promise((resolve, reject) => {
+            logoImg.onload = resolve;
+            logoImg.onerror = reject;
+            logoImg.src = customization.logoUrl as string;
+          });
+          logoSource = logoImg;
         }
 
-        // Draw logo with corner radius
-        if (customization.logoCornerRadius > 0) {
+        // Clear area behind logo if requested, then paint background color
+        const logoBgSize = logoSize + (customization.logoMargin * 2);
+        const logoBgX = (size - logoBgSize) / 2;
+        const logoBgY = (size - logoBgSize) / 2;
+        const centerX = size / 2;
+        const centerY = size / 2;
+        const circleRadius = (logoSize / 2) + customization.logoMargin;
+
+        const drawRoundedRect = (x: number, y: number, w: number, h: number, radius: number) => {
+          const r = Math.max(0, Math.min(radius, Math.min(w, h) / 2));
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath();
+        };
+
+        const drawCircle = (cx: number, cy: number, r: number) => {
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.closePath();
+        };
+
+        const shape = customization.logoBackgroundShape || 'circle';
+
+        if (customization.logoClearArea) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'destination-out';
+          if (shape === 'rounded') {
+            drawRoundedRect(logoBgX, logoBgY, logoBgSize, logoBgSize, customization.logoCornerRadius);
+          } else if (shape === 'square') {
+            ctx.beginPath();
+            ctx.rect(logoBgX, logoBgY, logoBgSize, logoBgSize);
+            ctx.closePath();
+          } else {
+            drawCircle(centerX, centerY, circleRadius);
+          }
+          ctx.fill();
+          ctx.restore();
+        }
+
+        if (shape !== 'none') {
+          ctx.save();
+          ctx.fillStyle = customization.logoBackgroundColor;
+          if (shape === 'rounded') {
+            drawRoundedRect(logoBgX, logoBgY, logoBgSize, logoBgSize, customization.logoCornerRadius);
+            ctx.fill();
+          } else if (shape === 'square') {
+            ctx.fillRect(logoBgX, logoBgY, logoBgSize, logoBgSize);
+          } else {
+            drawCircle(centerX, centerY, circleRadius);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        if (logoSource && customization.logoTintEnabled) {
+          const off = document.createElement('canvas');
+          off.width = Math.max(1, Math.floor(logoSize));
+          off.height = Math.max(1, Math.floor(logoSize));
+          const octx = off.getContext('2d');
+          if (octx) {
+            octx.drawImage(logoSource as CanvasImageSource, 0, 0, off.width, off.height);
+            octx.globalCompositeOperation = 'source-in';
+            octx.globalAlpha = customization.logoTintOpacity ?? 1;
+            octx.fillStyle = customization.logoTintColor || '#000000';
+            octx.fillRect(0, 0, off.width, off.height);
+            octx.globalCompositeOperation = 'source-over';
+            octx.globalAlpha = 1;
+          }
+          logoSource = off;
+        }
+
+        if (logoSource && customization.logoCornerRadius > 0) {
           ctx.save();
           const radius = customization.logoCornerRadius;
           const x = logoX;
@@ -208,10 +292,10 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
           ctx.quadraticCurveTo(x, y, x + radius, y);
           ctx.closePath();
           ctx.clip();
-          ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+          ctx.drawImage(logoSource as CanvasImageSource, logoX, logoY, logoSize, logoSize);
           ctx.restore();
-        } else {
-          ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+        } else if (logoSource) {
+          ctx.drawImage(logoSource as CanvasImageSource, logoX, logoY, logoSize, logoSize);
         }
       }
 
@@ -848,6 +932,30 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
                     />
                   </div>
 
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-gray-700">Clear area behind logo</label>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(customization.logoClearArea)}
+                      onChange={(e) => updateCustomization('logoClearArea', e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">Background Shape</label>
+                    <select
+                      value={customization.logoBackgroundShape || 'circle'}
+                      onChange={(e) => updateCustomization('logoBackgroundShape', e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="none">None</option>
+                      <option value="square">Square</option>
+                      <option value="rounded">Rounded</option>
+                      <option value="circle">Circle</option>
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-2">
                       Logo Background Color
@@ -881,6 +989,48 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
                       className="w-full"
                     />
                   </div>
+
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-gray-700">Apply tint to logo</label>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(customization.logoTintEnabled)}
+                      onChange={(e) => updateCustomization('logoTintEnabled', e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </div>
+                  {customization.logoTintEnabled && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">Tint Color</label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="color"
+                            value={customization.logoTintColor || '#000000'}
+                            onChange={(e) => updateCustomization('logoTintColor', e.target.value)}
+                            className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={customization.logoTintColor || '#000000'}
+                            onChange={(e) => updateCustomization('logoTintColor', e.target.value)}
+                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">Tint Opacity: {Math.round((customization.logoTintOpacity || 1) * 100)}%</label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={Math.round((customization.logoTintOpacity || 1) * 100)}
+                          onChange={(e) => updateCustomization('logoTintOpacity', parseInt(e.target.value) / 100)}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1197,4 +1347,3 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
 };
 
 export default QRGenerator;
-

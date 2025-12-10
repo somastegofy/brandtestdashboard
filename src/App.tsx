@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ProductsTab from './components/ProductsTab';
 import StudioTab from './components/StudioTab';
@@ -93,9 +93,36 @@ const AuthRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => 
 };
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Sync activeTab with URL path
+  useEffect(() => {
+    const path = location.pathname.substring(1); // remove leading slash
+    // map path to tab id (simple direct mapping for most)
+    if (path === '' || path === 'dashboard') setActiveTab('dashboard');
+    else if (path === 'products') setActiveTab('products');
+    else if (path === 'studio') setActiveTab('studio');
+    else if (path === 'rewards-campaigns') setActiveTab('rewards-campaigns');
+    else if (path === 'smart-triggers') setActiveTab('smart-triggers');
+    else if (path === 'analytics') setActiveTab('analytics');
+    else if (path === 'qr-codes') setActiveTab('qr-codes');
+    else if (path === 'buyer-source-proof') setActiveTab('buyer-source-proof');
+    else if (path === 'consumers') setActiveTab('consumers');
+    else if (path === 'reviews-manager') setActiveTab('reviews-manager');
+    else if (path === 'support') setActiveTab('support');
+    else if (path === 'files') setActiveTab('files');
+    else if (path === 'settings') setActiveTab('settings');
+  }, [location.pathname]);
+
+  const handleTabChange = (tabId: string) => {
+    if (tabId === 'dashboard') navigate('/');
+    else navigate(`/${tabId}`);
+  };
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
+
   // Products state - moved from ProductsTab
   const [products, setProducts] = useState<Product[]>([
     {
@@ -369,7 +396,7 @@ function App() {
   const openSharedSubmissionDetailsModal = (submission: Submission, filteredList?: Submission[]) => {
     setSelectedSubmissionForModal(submission);
     setShowSharedSubmissionDetailsModal(true);
-    
+
     if (filteredList) {
       setFilteredSubmissionsForModal(filteredList);
       const index = filteredList.findIndex(s => s.id === submission.id);
@@ -400,11 +427,11 @@ function App() {
       prevSubmissions.map(sub =>
         sub.id === submissionId
           ? {
-              ...sub,
-              rewardStatus: 'Approved' as const,
-              rewardSent: 'REWARD20OFF',
-              approvalComment: comment
-            }
+            ...sub,
+            rewardStatus: 'Approved' as const,
+            rewardSent: 'REWARD20OFF',
+            approvalComment: comment
+          }
           : sub
       )
     );
@@ -415,11 +442,11 @@ function App() {
       prevSubmissions.map(sub =>
         sub.id === submissionId
           ? {
-              ...sub,
-              rewardStatus: 'Rejected' as const,
-              rewardSent: null,
-              rejectionReason: reason
-            }
+            ...sub,
+            rewardStatus: 'Rejected' as const,
+            rewardSent: null,
+            rejectionReason: reason
+          }
           : sub
       )
     );
@@ -435,21 +462,21 @@ function App() {
         return <DashboardOverview />;
       case 'products':
         return (
-          <ProductsTab 
-            onTabChange={setActiveTab}
+          <ProductsTab
+            onTabChange={handleTabChange}
             products={products}
             setProducts={setProducts}
             categoriesState={categoriesState}
             setCategoriesState={setCategoriesState}
             onRedirectToStudio={(product) => {
               setSelectedProductForStudio(product);
-              setActiveTab('studio');
+              handleTabChange('studio');
             }}
           />
         );
       case 'studio':
         return (
-          <StudioTab 
+          <StudioTab
             products={products}
             selectedProductForStudio={selectedProductForStudio}
             setSelectedProductForStudio={setSelectedProductForStudio}
@@ -464,7 +491,7 @@ function App() {
         return <AnalyticsTab />;
       case 'buyer-source-proof':
         return (
-          <BuyerSourceProofTab 
+          <BuyerSourceProofTab
             submissions={submissions}
             setSubmissions={setSubmissions}
             openSharedSubmissionDetailsModal={openSharedSubmissionDetailsModal}
@@ -473,17 +500,17 @@ function App() {
         );
       case 'qr-codes':
         return (
-          <QrCodeManagerTab 
+          <QrCodeManagerTab
             products={products}
           />
         );
       case 'consumers':
         return (
-          <ConsumersTab 
+          <ConsumersTab
             submissions={submissions}
             openSharedSubmissionDetailsModal={openSharedSubmissionDetailsModal}
             closeSharedSubmissionDetailsModal={closeSharedSubmissionDetailsModal}
-            onTabChange={setActiveTab}
+            onTabChange={(tab) => handleTabChange(tab)}
           />
         );
       case 'reviews-manager':
@@ -508,71 +535,68 @@ function App() {
   };
 
   return (
-    <Router>
-      <Routes>
-        {/* Auth Routes */}
-        <Route
-          path="/auth/login"
-          element={
-            <AuthRoute>
-              <BrandLogin />
-            </AuthRoute>
-          }
-        />
-        <Route
-          path="/auth/signup"
-          element={
-            <AuthRoute>
-              <BrandSignup />
-            </AuthRoute>
-          }
-        />
+    <Routes>
+      {/* Auth Routes */}
+      <Route
+        path="/auth/login"
+        element={
+          <AuthRoute>
+            <BrandLogin />
+          </AuthRoute>
+        }
+      />
+      <Route
+        path="/auth/signup"
+        element={
+          <AuthRoute>
+            <BrandSignup />
+          </AuthRoute>
+        }
+      />
 
-        {/* QR Scan Redirect Route */}
-        <Route path="/qr/:qrId" element={<QRScanRedirect />} />
-        
-        {/* Published Page Route */}
-        <Route path="/published-product/:slug" element={<PublishedPageViewer />} />
-        
-        {/* Main Application Route (protected) */}
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <div className="min-h-screen bg-gray-50">
-                <Sidebar
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
-                  isCollapsed={isSidebarCollapsed}
-                  onToggleCollapse={toggleSidebar}
-                />
+      {/* QR Scan Redirect Route */}
+      <Route path="/qr/:qrId" element={<QRScanRedirect />} />
 
-                <div
-                  className={`transition-all duration-300 ${
-                    isSidebarCollapsed ? 'ml-20' : 'ml-64'
+      {/* Published Page Route */}
+      <Route path="/published-product/:slug" element={<PublishedPageViewer />} />
+
+      {/* Main Application Route (protected) */}
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <div className="min-h-screen bg-gray-50">
+              <Sidebar
+                activeTab={activeTab}
+                onTabChange={handleTabChange}
+                isCollapsed={isSidebarCollapsed}
+                onToggleCollapse={toggleSidebar}
+              />
+
+              <div
+                className={`transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'
                   }`}
-                >
-                  <main className="min-h-screen">{renderContent()}</main>
-                </div>
-
-                {/* Shared Submission Details Modal */}
-                <SubmissionDetailsModal
-                  submission={selectedSubmissionForModal}
-                  isOpen={showSharedSubmissionDetailsModal}
-                  onClose={closeSharedSubmissionDetailsModal}
-                  onApprove={handleApproveSubmission}
-                  onReject={handleRejectSubmission}
-                  onNavigate={navigateSubmission}
-                  currentIndex={currentSubmissionIndex}
-                  totalCount={filteredSubmissionsForModal.length}
-                  canNavigate={filteredSubmissionsForModal.length > 1}
-                />
+              >
+                <main className="min-h-screen">{renderContent()}</main>
               </div>
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </Router>
+
+              {/* Shared Submission Details Modal */}
+              <SubmissionDetailsModal
+                submission={selectedSubmissionForModal}
+                isOpen={showSharedSubmissionDetailsModal}
+                onClose={closeSharedSubmissionDetailsModal}
+                onApprove={handleApproveSubmission}
+                onReject={handleRejectSubmission}
+                onNavigate={navigateSubmission}
+                currentIndex={currentSubmissionIndex}
+                totalCount={filteredSubmissionsForModal.length}
+                canNavigate={filteredSubmissionsForModal.length > 1}
+              />
+            </div>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
 

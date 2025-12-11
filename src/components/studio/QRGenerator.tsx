@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { Download, RefreshCw, Upload, X, Check, Palette, Frame, Sparkles, Image as ImageIcon, Type, Settings2 } from 'lucide-react';
+import { Download, RefreshCw, Upload, X, Check, Palette, Frame, Image as ImageIcon, Type, Settings2 } from 'lucide-react';
 
 export interface QRCustomization {
   // Colors
@@ -170,6 +170,11 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
       ctx.fillStyle = customization.backgroundColor;
       ctx.fillRect(0, 0, size, size);
 
+      // Determine effective error correction level
+      // If logo is enabled, force High (H) error correction to ensure scannability 
+      // despite the logo covering some data modules.
+      const effectiveErrorCorrectionLevel = customization.logoEnabled ? 'H' : customization.errorCorrectionLevel;
+
       // Generate QR code data URL
       const qrDataUrl = await QRCode.toDataURL(url, {
         width: size - (margin * 2),
@@ -178,7 +183,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
           dark: customization.foregroundColor,
           light: customization.backgroundColor
         },
-        errorCorrectionLevel: customization.errorCorrectionLevel
+        errorCorrectionLevel: effectiveErrorCorrectionLevel
       });
 
       // Draw QR code
@@ -350,7 +355,7 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
   const getNormalizedLogoUrl = async (url: string, tint?: { enabled: boolean; color: string; opacity: number }): Promise<string> => {
     if (!url) return '';
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
@@ -419,127 +424,147 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
     if (!targetCanvas && format !== 'svg') return;
 
     let dataUrl = '';
-    let mimeType = '';
     let extension = '';
 
     switch (format) {
       case 'png':
         dataUrl = targetCanvas!.toDataURL('image/png');
-        mimeType = 'image/png';
         extension = 'png';
         break;
       case 'jpeg':
         dataUrl = targetCanvas!.toDataURL('image/jpeg', 0.92);
-        mimeType = 'image/jpeg';
         extension = 'jpg';
         break;
       case 'svg':
         try {
-          // Generate SVG with the specific effective size
+          // Determine effective error correction level
+          const effectiveErrorCorrectionLevel = customization.logoEnabled ? 'H' : customization.errorCorrectionLevel;
+
+          // Generate SVG with the specific effective size (margin handled via viewBox)
           const baseSvg = await QRCode.toString(url, {
             type: 'svg',
             width: effectiveSize,
-            margin: customization.margin,
+            margin: 0,
             color: {
               dark: customization.foregroundColor,
               light: customization.backgroundColor
             },
-            errorCorrectionLevel: customization.errorCorrectionLevel
+            errorCorrectionLevel: effectiveErrorCorrectionLevel
           });
 
+          const dim = customization.size;
+          const marg = customization.margin;
+          const innerDim = dim - (marg * 2);
+
           // Add XML namespace for xlink
-          let augmented = baseSvg.replace('<svg', '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+          let augmented = baseSvg.replace('<svg', '<svg xmlns:xlink="http://www.w3.org/199/xlink"');
+          extension = 'svg';
 
-          // Parse viewBox to determine the internal coordinate system
-          const viewBoxMatch = baseSvg.match(/viewBox="([^"]+)"/);
+          // Parse viewBox to determine
+          const viewBoxMatch = baseSvg.match(/viewBox=["']?([^"']+)["']?/);
 
-          if (customization.logoEnabled && viewBoxMatch && viewBoxMatch[1]) {
+          if (viewBoxMatch && viewBoxMatch[1]) {
             const vbParts = viewBoxMatch[1].split(/\s+/).map(Number);
             if (vbParts.length === 4) {
               const [vbX, vbY, vbWidth, vbHeight] = vbParts;
 
-              // Use relative coordinates logic (same as handleSave)
-              const pixelToCoordRatio = vbWidth / effectiveSize;
+              // Calc margin in coords
+              const marginInCoords = innerDim > 0 ? vbWidth * (marg / innerDim) : 0;
 
-              const logoSizeCoords = vbWidth * (customization.logoSize / 100);
+              // Updates viewBox to include margin
+              const newVbX = vbX - marginInCoords;
+              const newVbY = vbY - marginInCoords;
+              const newVbW = vbWidth + (marginInCoords * 2);
+              const newVbH = vbHeight + (marginInCoords * 2);
 
-              const logoX = vbX + (vbWidth - logoSizeCoords) / 2;
-              const logoY = vbY + (vbHeight - logoSizeCoords) / 2;
+              augmented = augmented.replace(
+                viewBoxMatch[0],
+                `viewBox="${newVbX} ${newVbY} ${newVbW} ${newVbH}"`
+              );
 
-              const logoMarginCoords = customization.logoMargin * pixelToCoordRatio; // approximate scaling? No, margin is constant in visual pixel logic usually, but here we scale everything.
-              // Actually if we scale the detailed QR, we should scale margin too? 
-              // customization.logoMargin is in 'design pixels' (based on default ~512 canvas).
-              // If we export at 5cm (approx 591px), the margin should probably scale proportionally if we want it to look identical?
-              // OR we keep it fixed in pixels? Standard is usually proportional scaling for print.
-              // Let's assume customization params are for the "base" design.
-
-              // Scaling factor relative to "base" size (which is customization.size)
-              // But wait, customization.size determines the PREVIEW CANVAS size.
-
-              // Let's stick to the relative logic:
-              // logoMargin is visual pixels in the preview.
-              // We need to map that to coordinates.
-              // PREVIEW pixel-to-coord ratio = vbWidth / customization.size.
-              const previewRatio = vbWidth / customization.size;
-              const scaledLogoMarginCoords = customization.logoMargin * previewRatio;
-
-              const bgSize = logoSizeCoords + (scaledLogoMarginCoords * 2);
-              const logoBgX = logoX - scaledLogoMarginCoords;
-              const logoBgY = logoY - scaledLogoMarginCoords;
-
-              const centerX = vbX + vbWidth / 2;
-              const centerY = vbY + vbHeight / 2;
-              const circleR = bgSize / 2;
-
-              let overlays = '';
-              const effectiveFill = customization.logoBackgroundShape !== 'none' ? customization.logoBackgroundColor : customization.backgroundColor;
-
-              if (customization.logoClearArea || customization.logoBackgroundShape !== 'none') {
-                const radiusCoords = customization.logoCornerRadius * previewRatio;
-
-                if (customization.logoBackgroundShape === 'rounded') {
-                  overlays += `<rect x="${logoBgX}" y="${logoBgY}" width="${bgSize}" height="${bgSize}" rx="${radiusCoords}" ry="${radiusCoords}" fill="${effectiveFill}"/>`;
-                } else if (customization.logoBackgroundShape === 'square') {
-                  overlays += `<rect x="${logoBgX}" y="${logoBgY}" width="${bgSize}" height="${bgSize}" fill="${effectiveFill}"/>`;
-                } else {
-                  overlays += `<circle cx="${centerX}" cy="${centerY}" r="${circleR}" fill="${effectiveFill}"/>`;
+              // Inject background rect covering the new viewBox
+              const bgRect = `<rect x="${newVbX}" y="${newVbY}" width="${newVbW}" height="${newVbH}" fill="${customization.backgroundColor}"/>`;
+              const svgOpenTagIndex = augmented.indexOf('<svg');
+              if (svgOpenTagIndex !== -1) {
+                const svgTagEndIndex = augmented.indexOf('>', svgOpenTagIndex);
+                if (svgTagEndIndex !== -1) {
+                  augmented = augmented.slice(0, svgTagEndIndex + 1) + bgRect + augmented.slice(svgTagEndIndex + 1);
                 }
               }
 
-              let logoHref = '';
-              if (customization.logoUrl) {
-                logoHref = await getNormalizedLogoUrl(customization.logoUrl, {
-                  enabled: customization.logoTintEnabled || false,
-                  color: customization.logoTintColor || '#000000',
-                  opacity: customization.logoTintOpacity ?? 1
-                });
-              }
+              if (customization.logoEnabled) {
+                // Logo logic - Match Canvas Logic (percentage of Inner Module area)
+                // Canvas: logoSize = (size - margin*2) * (percent/100)
+                // SVG: vbWidth corresponds to (size - margin*2)
+                const logoSizeCoords = vbWidth * (customization.logoSize / 100);
 
-              if (logoHref) {
-                const clipId = `logoClip-${Date.now()}`;
-                let clipDef = '';
-                let clipAttr = '';
-                const radiusCoords = customization.logoCornerRadius * previewRatio;
+                const logoX = vbX + (vbWidth - logoSizeCoords) / 2;
+                const logoY = vbY + (vbHeight - logoSizeCoords) / 2;
 
-                if (customization.logoCornerRadius > 0) {
-                  clipDef = `<defs><clipPath id="${clipId}"><rect x="${logoX}" y="${logoY}" width="${logoSizeCoords}" height="${logoSizeCoords}" rx="${radiusCoords}" ry="${radiusCoords}"/></clipPath></defs>`;
-                  clipAttr = `clip-path="url(#${clipId})"`;
+                const logoMarginRatio = innerDim > 0 ? customization.logoMargin / innerDim : 0;
+                const scaledLogoMarginCoords = vbWidth * logoMarginRatio;
+
+                // Define ratio for radius calcs
+                const previewRatio = innerDim > 0 ? vbWidth / innerDim : 0;
+
+                const bgSize = logoSizeCoords + (scaledLogoMarginCoords * 2);
+                const logoBgX = logoX - scaledLogoMarginCoords;
+                const logoBgY = logoY - scaledLogoMarginCoords;
+
+                const centerX = vbX + vbWidth / 2;
+                const centerY = vbY + vbHeight / 2;
+                const circleR = bgSize / 2;
+
+                let overlays = '';
+                const effectiveFill = customization.logoBackgroundShape !== 'none' ? customization.logoBackgroundColor : customization.backgroundColor;
+
+                if (customization.logoClearArea || customization.logoBackgroundShape !== 'none') {
+                  const radiusCoords = customization.logoCornerRadius * previewRatio;
+
+                  if (customization.logoBackgroundShape === 'rounded') {
+                    overlays += `<rect x="${logoBgX}" y="${logoBgY}" width="${bgSize}" height="${bgSize}" rx="${radiusCoords}" ry="${radiusCoords}" fill="${effectiveFill}"/>`;
+                  } else if (customization.logoBackgroundShape === 'square') {
+                    overlays += `<rect x="${logoBgX}" y="${logoBgY}" width="${bgSize}" height="${bgSize}" fill="${effectiveFill}"/>`;
+                  } else {
+                    overlays += `<circle cx="${centerX}" cy="${centerY}" r="${circleR}" fill="${effectiveFill}"/>`;
+                  }
                 }
 
-                const imageEl = `${clipDef}<image x="${logoX}" y="${logoY}" width="${logoSizeCoords}" height="${logoSizeCoords}" href="${logoHref}" xlink:href="${logoHref}" ${clipAttr} preserveAspectRatio="xMidYMid meet" />`;
-
-                const insertPos = augmented.lastIndexOf('</svg>');
-                if (insertPos !== -1) {
-                  augmented = augmented.slice(0, insertPos) + overlays + imageEl + augmented.slice(insertPos);
-                } else {
-                  augmented += overlays + imageEl;
+                let logoHref = '';
+                if (customization.logoUrl) {
+                  logoHref = await getNormalizedLogoUrl(customization.logoUrl, {
+                    enabled: customization.logoTintEnabled || false,
+                    color: customization.logoTintColor || '#000000',
+                    opacity: customization.logoTintOpacity ?? 1
+                  });
                 }
-              } else if (overlays) {
-                const insertPos = augmented.lastIndexOf('</svg>');
-                if (insertPos !== -1) {
-                  augmented = augmented.slice(0, insertPos) + overlays + augmented.slice(insertPos);
-                } else {
-                  augmented += overlays;
+
+                if (logoHref) {
+                  const clipId = `logoClip-${Date.now()}`;
+                  let clipDef = '';
+                  let clipAttr = '';
+                  const radiusCoords = customization.logoCornerRadius * previewRatio; // Use consistent ratio
+
+                  if (customization.logoCornerRadius > 0) {
+                    clipDef = `<defs><clipPath id="${clipId}"><rect x="${logoX}" y="${logoY}" width="${logoSizeCoords}" height="${logoSizeCoords}" rx="${radiusCoords}" ry="${radiusCoords}"/></clipPath></defs>`;
+                    clipAttr = `clip-path="url(#${clipId})"`;
+                  }
+
+                  const imageEl = `${clipDef}<image x="${logoX}" y="${logoY}" width="${logoSizeCoords}" height="${logoSizeCoords}" href="${logoHref}" xlink:href="${logoHref}" ${clipAttr} preserveAspectRatio="xMidYMid meet" />`;
+
+                  const insertPos = augmented.lastIndexOf('</svg>');
+                  if (insertPos !== -1) {
+                    augmented = augmented.slice(0, insertPos) + overlays + imageEl + augmented.slice(insertPos);
+                  } else {
+                    augmented += overlays + imageEl;
+                  }
+                } else if (overlays) {
+                  const insertPos = augmented.lastIndexOf('</svg>');
+                  if (insertPos !== -1) {
+                    augmented = augmented.slice(0, insertPos) + overlays + augmented.slice(insertPos);
+                  } else {
+                    augmented += overlays;
+                  }
                 }
               }
             }
@@ -547,7 +572,6 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
 
           const blob = new Blob([augmented], { type: 'image/svg+xml;charset=utf-8' });
           dataUrl = URL.createObjectURL(blob);
-          mimeType = 'image/svg+xml';
           extension = 'svg';
         } catch (error) {
           console.error('Error generating SVG:', error);
@@ -582,93 +606,133 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
 
       let svgData = '';
       try {
+        // Determine effective error correction level
+        const effectiveErrorCorrectionLevel = customization.logoEnabled ? 'H' : customization.errorCorrectionLevel;
+
         const baseSvg = await QRCode.toString(url, {
           type: 'svg',
           width: customization.size,
-          margin: customization.margin,
+          margin: 0,
           color: {
             dark: customization.foregroundColor,
             light: customization.backgroundColor
           },
-          errorCorrectionLevel: customization.errorCorrectionLevel
+          errorCorrectionLevel: effectiveErrorCorrectionLevel
         });
 
+        const dim = customization.size;
+        const marg = customization.margin;
+        const innerDim = dim - (marg * 2);
+
+        // Add XML namespace for xlink
         let augmented = baseSvg.replace('<svg', '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
 
         // Parse viewBox for coordinate system
-        const viewBoxMatch = baseSvg.match(/viewBox="([^"]+)"/);
+        const viewBoxMatch = baseSvg.match(/viewBox=["']?([^"']+)["']?/);
 
-        if (customization.logoEnabled && viewBoxMatch && viewBoxMatch[1]) {
+        if (viewBoxMatch && viewBoxMatch[1]) {
           const vbParts = viewBoxMatch[1].split(/\s+/).map(Number);
           if (vbParts.length === 4) {
             const [vbX, vbY, vbWidth, vbHeight] = vbParts;
-            const pixelToCoordRatio = vbWidth / customization.size;
-            const marginInCoords = customization.margin * pixelToCoordRatio;
-            const logoSizeCoords = vbWidth * (customization.logoSize / 100);
 
-            const logoX = vbX + (vbWidth - logoSizeCoords) / 2;
-            const logoY = vbY + (vbHeight - logoSizeCoords) / 2;
+            // Calc margin in coords
+            const marginInCoords = innerDim > 0 ? vbWidth * (marg / innerDim) : 0;
 
-            const logoMarginCoords = customization.logoMargin * pixelToCoordRatio;
-            const bgSize = logoSizeCoords + (logoMarginCoords * 2);
-            const logoBgX = logoX - logoMarginCoords;
-            const logoBgY = logoY - logoMarginCoords;
+            // Update viewBox
+            const newVbX = vbX - marginInCoords;
+            const newVbY = vbY - marginInCoords;
+            const newVbW = vbWidth + (marginInCoords * 2);
+            const newVbH = vbHeight + (marginInCoords * 2);
 
-            const centerX = vbX + vbWidth / 2;
-            const centerY = vbY + vbHeight / 2;
-            const circleR = bgSize / 2;
+            augmented = augmented.replace(
+              viewBoxMatch[0],
+              `viewBox="${newVbX} ${newVbY} ${newVbW} ${newVbH}"`
+            );
 
-            let overlays = '';
-            const effectiveFill = customization.logoBackgroundShape !== 'none' ? customization.logoBackgroundColor : customization.backgroundColor;
-
-            if (customization.logoClearArea || customization.logoBackgroundShape !== 'none') {
-              const radiusCoords = customization.logoCornerRadius * pixelToCoordRatio;
-              if (customization.logoBackgroundShape === 'rounded') {
-                overlays += `<rect x="${logoBgX}" y="${logoBgY}" width="${bgSize}" height="${bgSize}" rx="${radiusCoords}" ry="${radiusCoords}" fill="${effectiveFill}"/>`;
-              } else if (customization.logoBackgroundShape === 'square') {
-                overlays += `<rect x="${logoBgX}" y="${logoBgY}" width="${bgSize}" height="${bgSize}" fill="${effectiveFill}"/>`;
-              } else {
-                overlays += `<circle cx="${centerX}" cy="${centerY}" r="${circleR}" fill="${effectiveFill}"/>`;
+            // Inject background rect covering the new viewBox (ensures opaque margin)
+            const bgRect = `<rect x="${newVbX}" y="${newVbY}" width="${newVbW}" height="${newVbH}" fill="${customization.backgroundColor}"/>`;
+            const svgOpenTagIndex = augmented.indexOf('<svg');
+            if (svgOpenTagIndex !== -1) {
+              const svgTagEndIndex = augmented.indexOf('>', svgOpenTagIndex);
+              if (svgTagEndIndex !== -1) {
+                augmented = augmented.slice(0, svgTagEndIndex + 1) + bgRect + augmented.slice(svgTagEndIndex + 1);
               }
             }
 
-            let logoHref = '';
-            if (customization.logoUrl) {
-              logoHref = await getNormalizedLogoUrl(customization.logoUrl, {
-                enabled: customization.logoTintEnabled || false,
-                color: customization.logoTintColor || '#000000',
-                opacity: customization.logoTintOpacity ?? 1
-              });
-            }
+            if (customization.logoEnabled) {
+              // Logo logic - Match Canvas Logic (percentage of Inner Module area)
+              const logoSizeCoords = vbWidth * (customization.logoSize / 100);
 
-            if (logoHref) {
-              const clipId = `logoClip-save-${Date.now()}`;
-              let clipDef = '';
-              let clipAttr = '';
-              const radiusCoords = customization.logoCornerRadius * pixelToCoordRatio;
+              const logoX = vbX + (vbWidth - logoSizeCoords) / 2;
+              const logoY = vbY + (vbHeight - logoSizeCoords) / 2;
 
-              if (customization.logoCornerRadius > 0) {
-                clipDef = `<defs><clipPath id="${clipId}"><rect x="${logoX}" y="${logoY}" width="${logoSizeCoords}" height="${logoSizeCoords}" rx="${radiusCoords}" ry="${radiusCoords}"/></clipPath></defs>`;
-                clipAttr = `clip-path="url(#${clipId})"`;
+              const logoMarginRatio = innerDim > 0 ? customization.logoMargin / innerDim : 0;
+              const scaledLogoMarginCoords = vbWidth * logoMarginRatio;
+
+              // Define pixelToCoordRatio for radius calcs
+              const previewRatio = innerDim > 0 ? vbWidth / innerDim : 0;
+
+              const bgSize = logoSizeCoords + (scaledLogoMarginCoords * 2);
+              const logoBgX = logoX - scaledLogoMarginCoords;
+              const logoBgY = logoY - scaledLogoMarginCoords;
+
+              const centerX = vbX + vbWidth / 2;
+              const centerY = vbY + vbHeight / 2;
+              const circleR = bgSize / 2;
+
+              let overlays = '';
+              const effectiveFill = customization.logoBackgroundShape !== 'none' ? customization.logoBackgroundColor : customization.backgroundColor;
+
+              if (customization.logoClearArea || customization.logoBackgroundShape !== 'none') {
+                const radiusCoords = customization.logoCornerRadius * previewRatio;
+                if (customization.logoBackgroundShape === 'rounded') {
+                  overlays += `<rect x="${logoBgX}" y="${logoBgY}" width="${bgSize}" height="${bgSize}" rx="${radiusCoords}" ry="${radiusCoords}" fill="${effectiveFill}"/>`;
+                } else if (customization.logoBackgroundShape === 'square') {
+                  overlays += `<rect x="${logoBgX}" y="${logoBgY}" width="${bgSize}" height="${bgSize}" fill="${effectiveFill}"/>`;
+                } else {
+                  overlays += `<circle cx="${centerX}" cy="${centerY}" r="${circleR}" fill="${effectiveFill}"/>`;
+                }
               }
 
-              const imageEl = `${clipDef}<image x="${logoX}" y="${logoY}" width="${logoSizeCoords}" height="${logoSizeCoords}" href="${logoHref}" xlink:href="${logoHref}" ${clipAttr} preserveAspectRatio="xMidYMid meet" />`;
-
-              const insertPos = augmented.lastIndexOf('</svg>');
-              if (insertPos !== -1) {
-                augmented = augmented.slice(0, insertPos) + overlays + imageEl + augmented.slice(insertPos);
-              } else {
-                augmented += overlays + imageEl;
+              let logoHref = '';
+              if (customization.logoUrl) {
+                logoHref = await getNormalizedLogoUrl(customization.logoUrl, {
+                  enabled: customization.logoTintEnabled || false,
+                  color: customization.logoTintColor || '#000000',
+                  opacity: customization.logoTintOpacity ?? 1
+                });
               }
-            } else if (overlays) {
-              const insertPos = augmented.lastIndexOf('</svg>');
-              if (insertPos !== -1) {
-                augmented = augmented.slice(0, insertPos) + overlays + augmented.slice(insertPos);
-              } else {
-                augmented += overlays;
+
+              if (logoHref) {
+                const clipId = `logoClip-save-${Date.now()}`;
+                let clipDef = '';
+                let clipAttr = '';
+                const radiusCoords = customization.logoCornerRadius * previewRatio;
+
+                if (customization.logoCornerRadius > 0) {
+                  clipDef = `<defs><clipPath id="${clipId}"><rect x="${logoX}" y="${logoY}" width="${logoSizeCoords}" height="${logoSizeCoords}" rx="${radiusCoords}" ry="${radiusCoords}"/></clipPath></defs>`;
+                  clipAttr = `clip-path="url(#${clipId})"`;
+                }
+
+                const imageEl = `${clipDef}<image x="${logoX}" y="${logoY}" width="${logoSizeCoords}" height="${logoSizeCoords}" href="${logoHref}" xlink:href="${logoHref}" ${clipAttr} preserveAspectRatio="xMidYMid meet" />`;
+
+                const insertPos = augmented.lastIndexOf('</svg>');
+                if (insertPos !== -1) {
+                  augmented = augmented.slice(0, insertPos) + overlays + imageEl + augmented.slice(insertPos);
+                } else {
+                  augmented += overlays + imageEl;
+                }
+              } else if (overlays) {
+                const insertPos = augmented.lastIndexOf('</svg>');
+                if (insertPos !== -1) {
+                  augmented = augmented.slice(0, insertPos) + overlays + augmented.slice(insertPos);
+                } else {
+                  augmented += overlays;
+                }
               }
             }
           }
+
         }
 
         svgData = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(augmented)));

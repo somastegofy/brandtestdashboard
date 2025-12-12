@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { 
-  QrCode as QrCodeIcon, 
-  Search, 
-  Filter, 
-  Download, 
+import {
+  QrCode as QrCodeIcon,
+  Search,
+  Filter,
+  Download,
   Settings as SettingsIcon,
   Palette,
   Package,
@@ -171,38 +171,38 @@ const QrCodeManagerTab: React.FC<QrCodeManagerTabProps> = ({ products }) => {
 
   // Sub-tab configuration
   const subTabs = [
-    { 
-      id: 'all-codes', 
-      label: 'All Codes', 
-      icon: QrCodeIcon, 
+    {
+      id: 'all-codes',
+      label: 'All Codes',
+      icon: QrCodeIcon,
       count: qrCodes.length,
       description: 'All generated QR codes and linked barcodes'
     },
-    { 
-      id: 'products-qr', 
-      label: 'Products QR', 
-      icon: Package, 
+    {
+      id: 'products-qr',
+      label: 'Products QR',
+      icon: Package,
       count: qrCodes.filter(qr => qr.type === 'Product QR').length,
       description: 'Product-linked QR codes'
     },
-    { 
-      id: 'studio-pages-qr', 
-      label: 'Studio Pages QR', 
-      icon: Globe, 
+    {
+      id: 'studio-pages-qr',
+      label: 'Studio Pages QR',
+      icon: Globe,
       count: qrCodes.filter(qr => qr.type === 'Studio Page QR').length,
       description: 'Landing & product page QR codes from Studio'
     },
-    { 
-      id: 'customization', 
-      label: 'Customization', 
-      icon: Palette, 
+    {
+      id: 'customization',
+      label: 'Customization',
+      icon: Palette,
       count: null,
       description: 'Design, styling, and export tools'
     },
-    { 
-      id: 'settings', 
-      label: 'Settings', 
-      icon: SettingsIcon, 
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: SettingsIcon,
       count: null,
       description: 'Default QR settings for new codes'
     }
@@ -260,7 +260,7 @@ const QrCodeManagerTab: React.FC<QrCodeManagerTabProps> = ({ products }) => {
           </h1>
           <p className="text-gray-600">Central hub for QR Code & Barcode management with advanced customization</p>
         </div>
-        
+
         <div className="flex items-center space-x-3">
           <button className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
             <Download className="w-4 h-4 mr-2" />
@@ -343,24 +343,22 @@ const QrCodeManagerTab: React.FC<QrCodeManagerTabProps> = ({ products }) => {
           {subTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSubTab === tab.id;
-            
+
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id as any)}
-                className={`flex-shrink-0 flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  isActive
+                className={`flex-shrink-0 flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
                     ? 'bg-blue-50 text-blue-700 border border-blue-200'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+                  }`}
                 title={tab.description}
               >
                 <Icon className={`w-4 h-4 mr-2 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
                 <span>{tab.label}</span>
                 {tab.count !== null && (
-                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                    isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
                     {tab.count}
                   </span>
                 )}

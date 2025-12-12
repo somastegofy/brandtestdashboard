@@ -4,7 +4,16 @@ import type { QrCode } from '../../types/qrCodeTypes';
 import type { Product } from '../../types/productTypes';
 import type { StudioPage } from '../../types/qrCodeTypes';
 import QRGenerator, { QRCustomization } from '../studio/QRGenerator';
-import { saveQRCode, QRCode as DbQRCode } from '../../api/qrCodes';
+import { saveQRCode, updateQRCodeUrl, QRCode as DbQRCode } from '../../api/qrCodes';
+
+// Simple UUID generator for client-side ID reservation
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
 
 interface QrCustomizationTabProps {
   selectedQrCode: QrCode | null;
@@ -32,6 +41,27 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
   );
   const [isSaving, setIsSaving] = useState(false);
 
+  // State for Dynamic vs Static
+  const [isDynamic, setIsDynamic] = useState<boolean>(true);
+
+  // Persist a stable ID for new QRs so we can encode the dynamic link before saving
+  const [tempId] = useState<string>(generateUUID());
+
+  // Helper to check UUID validity
+  const isUuid = (id?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
+
+  // Determine the ID to use:
+  // 1. If existing has valid UUID, use it.
+  // 2. If existing has legacy ID (qr-...), we MUST generate a new UUID for Dynamic functionality to work (as DB likely requires UUID or logic requires it).
+  // 3. If new, use tempId.
+  const activeQrId = (selectedQrCode?.id && isUuid(selectedQrCode.id)) ? selectedQrCode.id : tempId;
+
+  // Dynamic Redirect Link
+  const dynamicQrLink = `${window.location.protocol}//${window.location.host}/qr/${activeQrId}`;
+
+  // Determine which URL to encode in the QR image
+  const encodedUrl = isDynamic ? dynamicQrLink : destinationUrl;
+
   const handleGenerate = async (qrData: {
     qrId: string;
     qrImagePng: string;
@@ -43,16 +73,14 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
     try {
       const existing = selectedQrCode;
 
-      // Use existing UUID if it looks like a Supabase id, otherwise treat as new
-      const existingId = existing?.id && existing.id.includes('-') ? existing.id : null;
-
-      const dbQr: DbQRCode = await saveQRCode(existingId, {
+      // Use the activeQrId (which covers both existing and our new reserved UUID)
+      const dbQr: DbQRCode = await saveQRCode(activeQrId, {
         name,
-        url: destinationUrl,
+        url: destinationUrl, // Always save the Target URL
         qrImagePng: qrData.qrImagePng,
         qrImageSvg: qrData.qrImageSvg,
         qrImageJpeg: qrData.qrImageJpeg,
-        customization: qrData.customization,
+        customization: { ...qrData.customization, isDynamic } as any, // Save dynamic state in customization
         campaignName: null,
         folderId: null,
         utmSource: undefined,
@@ -82,6 +110,29 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
       // eslint-disable-next-line no-console
       console.error('Failed to save QR code:', error);
       alert('Failed to save QR code. Please check console for details.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle saving ONLY the URL/Name (without regenerating QR image)
+  const handleUpdateUrlOnly = async () => {
+    if (!selectedQrCode) return; // Can't update if not saved yet
+    setIsSaving(true);
+    try {
+      const dbQr = await updateQRCodeUrl(selectedQrCode.id, destinationUrl, name);
+
+      const updated: QrCode = {
+        ...selectedQrCode,
+        name: dbQr.name,
+        url: dbQr.url,
+        lastUpdated: dbQr.updated_at
+      };
+      onQrCodeUpdate(updated);
+      alert('Destination URL updated successfully! ' + (isDynamic ? 'Existing QR codes will redirect to the new URL.' : 'Note: Since this is a Static QR, existing prints will NOT update.'));
+    } catch (error) {
+      console.error('Failed to update URL:', error);
+      alert('Failed to update URL.');
     } finally {
       setIsSaving(false);
     }
@@ -145,6 +196,21 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
               </div>
             </div>
 
+            {/* Dynamic Toggle */}
+            <div className="flex items-center justify-between border border-blue-100 bg-blue-50 p-2 rounded-lg">
+              <div>
+                <label className="block text-xs font-medium text-blue-900">Dynamic QR</label>
+                <p className="text-[10px] text-blue-700">{isDynamic ? 'Editable later' : 'Direct Link (Static)'}</p>
+              </div>
+              <button
+                onClick={() => setIsDynamic(!isDynamic)}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isDynamic ? 'bg-blue-600' : 'bg-gray-300'}`}
+              >
+                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isDynamic ? 'translate-x-4' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
                 CTA Text
@@ -158,13 +224,31 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
               />
             </div>
 
+            {/* Only show 'Save URL Only' if it's a valid Dynamic QR (UUID-based). Legacy QRs need re-saving first. */}
+            {selectedQrCode && isUuid(selectedQrCode.id) && (
+              <button
+                onClick={handleUpdateUrlOnly}
+                disabled={isSaving}
+                className="w-full inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed mb-2"
+              >
+                <LinkIcon className="w-4 h-4 mr-2" />
+                Save URL Only
+              </button>
+            )}
+
+            {selectedQrCode && !isUuid(selectedQrCode.id) && (
+              <div className="text-[10px] text-amber-600 bg-amber-50 p-2 rounded mb-2 border border-amber-200">
+                Legacy QR detected. Please click "Re-Create Design" below to upgrade this to a Dynamic QR (requires re-printing).
+              </div>
+            )}
+
             <button
               onClick={() => setShowDesigner(true)}
               disabled={isSaving}
               className="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Palette className="w-4 h-4 mr-2" />
-              {currentPreview ? 'Edit Design' : 'Open Designer'}
+              {currentPreview ? (selectedQrCode && !isUuid(selectedQrCode.id) ? 'Re-Create Design' : 'Edit Design') : 'Create Design'}
             </button>
           </div>
         </div>
@@ -177,7 +261,12 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
                 <>
                   <div className="text-center mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{name}</h3>
-                    <p className="text-sm text-gray-600">{destinationUrl}</p>
+                    <p className="text-sm text-gray-600 break-all">{destinationUrl}</p>
+                    {isDynamic ? (
+                      <p className="text-xs text-gray-400 mt-1">(Redirects via: {dynamicQrLink})</p>
+                    ) : (
+                      <p className="text-xs text-gray-400 mt-1">(Static Direct Link)</p>
+                    )}
                   </div>
                   <div className="bg-white p-6 rounded-lg shadow-lg border-2 border-gray-200">
                     <img
@@ -204,10 +293,12 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
                   <QrCodeIcon className="w-24 h-24 text-gray-300 mx-auto" />
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      No QR Code Generated Yet
+                      Create {isDynamic ? 'Dynamic' : 'Static'} QR Code
                     </h3>
                     <p className="text-sm text-gray-600 mb-4">
-                      Fill in the details on the left and click "Open Designer" to create your QR code.
+                      {isDynamic
+                        ? 'Dynamic QRs allow you to change the destination URL later without re-printing.'
+                        : 'Static QRs link directly to your URL but cannot be changed later.'}
                     </p>
                     <button
                       onClick={() => setShowDesigner(true)}
@@ -215,7 +306,7 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
                       className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <Palette className="w-4 h-4 mr-2" />
-                      Open Designer
+                      Create {isDynamic ? 'Dynamic' : 'Static'} Design
                     </button>
                   </div>
                 </div>
@@ -228,8 +319,8 @@ const QrCustomizationTab: React.FC<QrCustomizationTabProps> = ({
       {/* Designer Modal */}
       {showDesigner && (
         <QRGenerator
-          url={destinationUrl}
-          qrId={selectedQrCode?.id}
+          url={encodedUrl}
+          qrId={activeQrId}
           existingCustomization={getExistingCustomization()}
           initialTextContent={ctaText}
           onGenerate={handleGenerate}

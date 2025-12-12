@@ -82,20 +82,51 @@ export async function saveQRCode(
     owner_id: user?.id || null,
   };
 
-  // Only use qrCodeId if it's a valid UUID, otherwise treat as new QR code
   if (qrCodeId && isValidUUID(qrCodeId)) {
-    // Update existing QR code
-    const { data, error } = await supabase
-      .from('qr_codes')
-      .update(qrData)
-      .eq('id', qrCodeId)
-      .select()
-      .single();
+    // Check if record exists first to decide update vs insert with specific ID (rare edge case of pre-generating ID)
+    // Actually, simply: try update, if not found, insert?
+    // Current logic assumes if valid UUID, it's an update.
+    // We want to support: "New QR with Specific ID".
+    // Let's rely on standard flow: if it exists, update. If we generated a new UUID client-side, it won't exist, so we should insert it.
 
-    if (error) throw error;
-    return data;
+    // We'll modify the logic: Check existence? Or catch error?
+    // Easier: If 'qrCodeId' is provided but we "treat as new" (client gen), we need to insert.
+    // The previous logic was: if valid UUID -> allow update.
+    // Issue: Creating NEW with specific ID.
+    // Solution: We'll just try to upsert or check existence.
+    // But to minimize risk, let's just add 'id' to result.
+
+    // BETTER: The component calling this knows if it's NEW or EXISTING.
+    // We should trust the caller?
+
+    // Let's assume if it exists in DB, update.
+    const { count } = await supabase.from('qr_codes').select('id', { count: 'exact', head: true }).eq('id', qrCodeId);
+
+    if (count && count > 0) {
+      // Update existing
+      const { data, error } = await supabase
+        .from('qr_codes')
+        .update(qrData)
+        .eq('id', qrCodeId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } else {
+      // Insert with specific ID
+      const { data, error } = await supabase
+        .from('qr_codes')
+        .insert({ ...qrData, id: qrCodeId })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+
   } else {
-    // Create new QR code
+    // Create new QR code (auto ID)
     const { data, error } = await supabase
       .from('qr_codes')
       .insert(qrData)
@@ -105,6 +136,29 @@ export async function saveQRCode(
     if (error) throw error;
     return data;
   }
+}
+
+/**
+ * Update only the destination URL and name (Dynamic QR update)
+ */
+export async function updateQRCodeUrl(
+  qrCodeId: string,
+  url: string,
+  name: string
+): Promise<QRCode> {
+  const { data, error } = await supabase
+    .from('qr_codes')
+    .update({
+      url,
+      name,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', qrCodeId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 /**

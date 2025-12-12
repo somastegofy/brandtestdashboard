@@ -29,31 +29,42 @@ const QRScanRedirect: React.FC = () => {
       try {
         setLoading(true);
 
-        // Get the linked studio page from QR code
+        // 1. First check if linked to a Studio Page (Internal)
         const pageLink = await getPageByQRCodeId(qrId);
-        
-        if (!pageLink || !pageLink.studio_page_id) {
-          setError('QR code not linked to any page');
-          setLoading(false);
-          return;
-        }
 
-        // Increment scan count (fire and forget - don't wait for it)
+        // Increment scan count regardless of destination
         incrementQRCodeScans(qrId).catch(err => {
           console.error('Error incrementing QR code scans:', err);
         });
 
-        // Load the published page by ID to get the slug
-        const pageData = await loadStudioPageById(pageLink.studio_page_id);
-        
-        if (!pageData || pageData.status !== 'published') {
-          setError('Linked page not found or not published');
-          setLoading(false);
+        if (pageLink && pageLink.studio_page_id) {
+          // Load the published page by ID to get the slug
+          const pageData = await loadStudioPageById(pageLink.studio_page_id);
+
+          if (pageData && pageData.status === 'published') {
+            navigate(`/published-product/${pageData.slug}`, { replace: true });
+            return;
+          }
+        }
+
+        // 2. Fallback: Check for generic destination URL in qr_codes table (Dynamic External)
+        const { loadQRCodeById } = await import('../api/qrCodes'); // Lazy load to avoid circular deps if any
+        const qrData = await loadQRCodeById(qrId);
+
+        if (qrData && qrData.url) {
+          // Validate URL to prevent XSS/bad redirects
+          let targetUrl = qrData.url;
+          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+            targetUrl = 'https://' + targetUrl;
+          }
+
+          // External redirect
+          window.location.replace(targetUrl);
           return;
         }
 
-        // Redirect to published page using slug
-        navigate(`/published-product/${pageData.slug}`, { replace: true });
+        setError('QR code not linked to any active page or URL');
+        setLoading(false);
       } catch (err: any) {
         console.error('Error redirecting from QR code:', err);
         setError(err.message || 'Failed to redirect');

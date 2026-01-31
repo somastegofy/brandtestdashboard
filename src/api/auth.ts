@@ -53,6 +53,13 @@ export class WrongPasswordError extends Error {
   }
 }
 
+export class NetworkError extends Error {
+  constructor(message: string = 'Network error. Please check your internet connection and ensure the Supabase project is active.') {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
 /**
  * Check if an email already exists in Supabase Auth using auth.admin.listUsers.
  * This requires an admin client (service role key).
@@ -64,17 +71,32 @@ export async function checkEmailExists(email: string): Promise<boolean> {
     return false;
   }
 
-  const { data, error } = await supabaseAdmin.auth.admin.listUsers({
-    page: 1,
-    perPage: 1,
-    email,
-  });
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1,
+      email,
+    });
 
-  if (error) {
-    throw error;
+    if (error) {
+      // Check if it's a network error
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_NAME_NOT_RESOLVED') || error.message?.includes('NetworkError')) {
+        throw new NetworkError();
+      }
+      throw error;
+    }
+
+    return (data?.users?.length ?? 0) > 0;
+  } catch (err) {
+    // Catch network errors from fetch
+    if (err instanceof TypeError && err.message?.includes('Failed to fetch')) {
+      throw new NetworkError();
+    }
+    if (err instanceof NetworkError) {
+      throw err;
+    }
+    throw err;
   }
-
-  return (data?.users?.length ?? 0) > 0;
 }
 
 export async function signUpBrand(payload: BrandSignupPayload): Promise<BrandAuthResult> {
@@ -95,114 +117,178 @@ export async function signUpBrand(payload: BrandSignupPayload): Promise<BrandAut
     throw new PasswordsDoNotMatchError();
   }
 
-  const exists = await checkEmailExists(officialEmail);
-  if (exists) {
-    throw new EmailAlreadyExistsError();
-  }
-
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email: officialEmail,
-    password,
-    options: {
-      data: {
-        brand_name: brandName,
-        first_name: firstName,
-        last_name: lastName,
-        designation,
-        industry_category: industryCategory,
-        number_of_employees: numberOfEmployees,
-        mobile_number: mobileNumber,
-      },
-    },
-  });
-
-  if (signUpError) {
-    if ((signUpError as AuthError).message?.toLowerCase().includes('already registered')) {
+  try {
+    const exists = await checkEmailExists(officialEmail);
+    if (exists) {
       throw new EmailAlreadyExistsError();
     }
-    throw signUpError;
+  } catch (err) {
+    // If checkEmailExists throws NetworkError, propagate it
+    if (err instanceof NetworkError) {
+      throw err;
+    }
+    // If it's EmailAlreadyExistsError, re-throw it
+    if (err instanceof EmailAlreadyExistsError) {
+      throw err;
+    }
+    // For other errors, continue (we'll rely on signUp to surface duplicates)
   }
 
-  const user = signUpData.user;
-  const session = signUpData.session ?? null;
+  try {
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: officialEmail,
+      password,
+      options: {
+        data: {
+          brand_name: brandName,
+          first_name: firstName,
+          last_name: lastName,
+          designation,
+          industry_category: industryCategory,
+          number_of_employees: numberOfEmployees,
+          mobile_number: mobileNumber,
+        },
+      },
+    });
 
-  if (!user) {
-    return { user: null, session, profile: null };
+    if (signUpError) {
+      // Check if it's a network error
+      if (signUpError.message?.includes('Failed to fetch') || signUpError.message?.includes('ERR_NAME_NOT_RESOLVED') || signUpError.message?.includes('NetworkError')) {
+        throw new NetworkError();
+      }
+      if ((signUpError as AuthError).message?.toLowerCase().includes('already registered')) {
+        throw new EmailAlreadyExistsError();
+      }
+      throw signUpError;
+    }
+
+    const user = signUpData.user;
+    const session = signUpData.session ?? null;
+
+    if (!user) {
+      return { user: null, session, profile: null };
+    }
+
+    const profilePayload: Omit<BrandProfile, 'created_at' | 'updated_at'> = {
+      id: user.id,
+      brand_name: brandName,
+      first_name: firstName,
+      last_name: lastName,
+      official_email: officialEmail,
+      mobile_number: mobileNumber || null,
+      designation: designation || null,
+      industry_category: industryCategory || null,
+      number_of_employees: numberOfEmployees || null,
+    };
+
+    const { data: profileData, error: profileError } = await supabase
+      .from('brand_profiles')
+      .insert(profilePayload)
+      .select('*')
+      .single<BrandProfile>();
+
+    if (profileError) {
+      // Check if it's a network error
+      if (profileError.message?.includes('Failed to fetch') || profileError.message?.includes('ERR_NAME_NOT_RESOLVED')) {
+        throw new NetworkError();
+      }
+      throw profileError;
+    }
+
+    return {
+      session,
+      user,
+      profile: profileData,
+    };
+  } catch (err) {
+    // Catch network errors from fetch
+    if (err instanceof TypeError && err.message?.includes('Failed to fetch')) {
+      throw new NetworkError();
+    }
+    // Re-throw if it's already a known error type
+    if (err instanceof NetworkError || err instanceof EmailAlreadyExistsError || err instanceof PasswordsDoNotMatchError) {
+      throw err;
+    }
+    // Re-throw other errors
+    throw err;
   }
-
-  const profilePayload: Omit<BrandProfile, 'created_at' | 'updated_at'> = {
-    id: user.id,
-    brand_name: brandName,
-    first_name: firstName,
-    last_name: lastName,
-    official_email: officialEmail,
-    mobile_number: mobileNumber || null,
-    designation: designation || null,
-    industry_category: industryCategory || null,
-    number_of_employees: numberOfEmployees || null,
-  };
-
-  const { data: profileData, error: profileError } = await supabase
-    .from('brand_profiles')
-    .insert(profilePayload)
-    .select('*')
-    .single<BrandProfile>();
-
-  if (profileError) {
-    throw profileError;
-  }
-
-  return {
-    session,
-    user,
-    profile: profileData,
-  };
 }
 
 export async function loginBrand(payload: BrandLoginPayload): Promise<BrandAuthResult> {
   const { email, password } = payload;
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-  if (error) {
-    // Distinguish invalid user vs wrong password using admin listUsers
-    if (supabaseAdmin) {
-      const exists = await checkEmailExists(email);
-      if (!exists) {
-        throw new InvalidUserError();
+    if (error) {
+      // Check if it's a network error first
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('ERR_NAME_NOT_RESOLVED') || error.message?.includes('NetworkError')) {
+        throw new NetworkError();
       }
-      throw new WrongPasswordError();
+
+      // Distinguish invalid user vs wrong password using admin listUsers
+      if (supabaseAdmin) {
+        try {
+          const exists = await checkEmailExists(email);
+          if (!exists) {
+            throw new InvalidUserError();
+          }
+          throw new WrongPasswordError();
+        } catch (err) {
+          // If checkEmailExists throws NetworkError, propagate it
+          if (err instanceof NetworkError) {
+            throw err;
+          }
+          // Otherwise, re-throw the original error
+          throw error;
+        }
+      }
+
+      // Fallback: bubble up the generic error
+      throw error;
     }
 
-    // Fallback: bubble up the generic error
-    throw error;
+    const user = data.user ?? null;
+    const session = data.session ?? null;
+
+    if (!user) {
+      throw new InvalidUserError();
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('brand_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single<BrandProfile>();
+
+    if (profileError) {
+      // Check if it's a network error
+      if (profileError.message?.includes('Failed to fetch') || profileError.message?.includes('ERR_NAME_NOT_RESOLVED')) {
+        throw new NetworkError();
+      }
+      throw profileError;
+    }
+
+    return {
+      user,
+      session,
+      profile,
+    };
+  } catch (err) {
+    // Catch network errors from fetch
+    if (err instanceof TypeError && err.message?.includes('Failed to fetch')) {
+      throw new NetworkError();
+    }
+    // Re-throw if it's already a known error type
+    if (err instanceof NetworkError || err instanceof InvalidUserError || err instanceof WrongPasswordError) {
+      throw err;
+    }
+    // Re-throw other errors
+    throw err;
   }
-
-  const user = data.user ?? null;
-  const session = data.session ?? null;
-
-  if (!user) {
-    throw new InvalidUserError();
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('brand_profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single<BrandProfile>();
-
-  if (profileError) {
-    throw profileError;
-  }
-
-  return {
-    user,
-    session,
-    profile,
-  };
 }
 
 

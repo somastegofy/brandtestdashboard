@@ -15,6 +15,7 @@ import BrandLogin from './components/auth/BrandLogin';
 import BrandSignup from './components/auth/BrandSignup';
 import PublishedPageViewer from './components/PublishedPageViewer';
 import QRScanRedirect from './components/QRScanRedirect';
+import ShortenedURLRedirect from './components/ShortenedURLRedirect';
 import SettingsTab from './components/SettingsTab';
 import QrCodeManagerTab from './components/QrCodeManagerTab';
 import SupportInboxTab from './components/SupportInboxTab';
@@ -554,8 +555,18 @@ function App() {
         }
       />
 
-      {/* QR Scan Redirect Route */}
+      {/* Shortened URL Redirect Route (stego.fyi/{shortCode}) */}
+      <Route path="/s/:shortCode" element={<ShortenedURLRedirect />} />
+      
+      {/* QR Scan Redirect Routes - Support both old and new URL structures */}
+      {/* Order matters: more specific routes first */}
       <Route path="/qr/:qrId" element={<QRScanRedirect />} />
+      {/* Only match if type is 'page' or 'external' to avoid matching other routes */}
+      <Route 
+        path="/:brandname/:type/:qrId" 
+        element={<QRScanRedirect />}
+        // Add a check to ensure type is valid
+      />
 
       {/* Published Page Route */}
       <Route path="/published-product/:slug" element={<PublishedPageViewer />} />

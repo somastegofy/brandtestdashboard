@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Lock, Copy, Download, ExternalLink, AlertCircle, Check, ChevronDown, ChevronUp, Settings, QrCode } from 'lucide-react';
 import QRGenerator, { QRCustomization } from './QRGenerator';
 import { saveQRCode, linkQRCodeToPage, loadQRCodeById } from '../../api/qrCodes';
+import { getCurrentBrandProfile, getBrandNameSlug, getQRType } from '../../api/brandProfile';
+import { createShortenedURL } from '../../api/cloudflareKV';
 
 export interface QRLinkData {
   slug: string;
@@ -52,6 +54,8 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
   const [utmExpanded, setUtmExpanded] = useState(false);
   const [isSavingQR, setIsSavingQR] = useState(false);
   const [isLoadingQR, setIsLoadingQR] = useState(false);
+  const [brandName, setBrandName] = useState<string>('');
+  const [shortUrl, setShortUrl] = useState<string>('');
 
   // Helper function to validate UUID
   const isValidUUID = (str: string): boolean => {
@@ -59,6 +63,21 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidRegex.test(str);
   };
+
+  // Load brand profile on mount
+  useEffect(() => {
+    const loadBrandProfile = async () => {
+      try {
+        const profile = await getCurrentBrandProfile();
+        if (profile?.brand_name) {
+          setBrandName(profile.brand_name);
+        }
+      } catch (error) {
+        console.error('Error loading brand profile:', error);
+      }
+    };
+    loadBrandProfile();
+  }, []);
 
   // Load saved QR code from database when qrCodeId changes
   useEffect(() => {
@@ -80,6 +99,16 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
             }
             if (savedQR.customization) {
               onChange('qrCustomization', savedQR.customization);
+            }
+            
+            // Load shortened URL from database if it exists
+            try {
+              const shortened = await getShortenedURLByQRCodeId(data.qrCodeId);
+              if (shortened) {
+                setShortUrl(shortened.shortUrl);
+              }
+            } catch (error) {
+              console.error('Error loading shortened URL:', error);
             }
           }
         } catch (error) {
@@ -224,16 +253,21 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
       // qrData.qrId might be a temporary string like "qr-123456789", so we ignore it for new codes
       const qrCodeIdToUse = data.qrCodeId || null;
 
-      // For new QR codes, the images were generated with the direct published URL (fullUrl)
-      // For existing QR codes (with qrCodeId), they were generated with the redirect URL
-      const qrUrl = data.qrCodeId 
-        ? `${baseUrl}/qr/${data.qrCodeId}${urlWithUTM !== fullUrl ? `?${urlWithUTM.split('?')[1]}` : ''}` // Redirect URL for tracking
-        : (urlWithUTM || fullUrl); // Direct published URL (now includes /published-product/)
+      // Get brand name slug
+      const brandSlug = brandName ? getBrandNameSlug(brandName) : 'brand';
+      
+      // Determine QR type based on destination URL
+      const destinationUrl = urlWithUTM || fullUrl;
+      const qrType = getQRType(destinationUrl);
+      
+      // IMPORTANT: Save the DESTINATION URL in the database, not the redirect URL
+      // The redirect URL (/{brandname}/{type}/{qrId}) is only used to encode in the QR image
+      // The database stores where the QR code should actually redirect to
 
       // Save QR code to database - pass null for new codes to let DB generate UUID
       const qrCode = await saveQRCode(qrCodeIdToUse, {
         name: data.campaignName || `QR Code for ${data.slug || 'Page'}`,
-        url: qrUrl,
+        url: destinationUrl, // Save the destination URL, not the redirect URL
         qrImagePng: qrData.qrImagePng,
         qrImageSvg: qrData.qrImageSvg,
         qrImageJpeg: qrData.qrImageJpeg,
@@ -245,14 +279,28 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
         utmCampaign: data.utmCampaign || undefined,
       });
 
+      // Generate the redirect URL for shortened URL creation (not saved to DB)
+      const redirectQRUrl = `${baseUrl}/${brandSlug}/${qrType}/${qrCode.id}${urlWithUTM !== fullUrl ? `?${urlWithUTM.split('?')[1]}` : ''}`;
+      
+      // Create shortened URL using Supabase (for the redirect URL, not destination)
+      // Always check if it exists first, then create if missing
+      let shortenedUrl = '';
+      try {
+        // Create new shortened URL (Cloudflare KV doesn't support checking by QR code ID)
+        console.log('🔗 QRLinkPanel: Creating shortened URL for:', redirectQRUrl);
+        const shortened = await createShortenedURL(redirectQRUrl);
+        shortenedUrl = shortened.shortUrl;
+        setShortUrl(shortenedUrl);
+        console.log('✅ QRLinkPanel: Shortened URL created:', shortenedUrl);
+      } catch (shortUrlError: any) {
+        console.error('Error creating shortened URL:', shortUrlError);
+        // Don't fail the whole operation if shortened URL creation fails
+      }
+
       // Link QR code to studio page if page ID exists
       if (studioPageId && qrCode.id) {
         await linkQRCodeToPage(qrCode.id, studioPageId);
       }
-
-      // If this is a new QR code (no qrCodeId), we can optionally regenerate with redirect URL for tracking
-      // But for now, we'll save with the direct URL so it works immediately
-      // Users can regenerate later with the redirect URL if they want tracking
 
       // Update QR code data in state
       onChange('qrCodeId', qrCode.id);
@@ -263,7 +311,7 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
       onChange('qrOption', 'create_new');
 
       setShowQRGenerator(false);
-      alert('QR code saved successfully!');
+      alert('QR code saved successfully!' + (shortUrl ? `\nShort URL: ${shortUrl}` : ''));
     } catch (error: any) {
       console.error('Error saving QR code:', error);
       alert(`Failed to save QR code: ${error.message || 'Unknown error'}`);
@@ -377,9 +425,54 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
                 )
               )}
 
-              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <p className="text-xs font-medium text-gray-700 mb-1">Full URL</p>
-                <p className="text-sm text-gray-900 break-all">{fullUrl}</p>
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-1">Full URL</p>
+                  <p className="text-sm text-gray-900 break-all">{fullUrl}</p>
+                </div>
+                {data.qrCodeId && isValidUUID(data.qrCodeId) && brandName && (() => {
+                  const brandSlug = getBrandNameSlug(brandName);
+                  const qrType = getQRType(fullUrl);
+                  const newQRUrl = `${baseUrl}/${brandSlug}/${qrType}/${data.qrCodeId}`;
+                  return (
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 mb-1">QR Code URL</p>
+                      <p className="text-sm text-gray-900 break-all font-mono">{newQRUrl}</p>
+                    </div>
+                  );
+                })()}
+                {shortUrl && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-700 mb-1">Shortened URL</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-blue-600 break-all font-mono flex-1">{shortUrl}</p>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(shortUrl);
+                            setCopiedUrl(true);
+                            setTimeout(() => setCopiedUrl(false), 2000);
+                          } catch (error) {
+                            console.error('Failed to copy URL:', error);
+                          }
+                        }}
+                        className="inline-flex items-center px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                      >
+                        {copiedUrl ? (
+                          <>
+                            <Check className="w-3 h-3 mr-1" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 mr-1" />
+                            Copy
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -756,18 +849,25 @@ const QRLinkPanel: React.FC<QRLinkPanelProps> = ({
       )}
 
       {/* QR Generator Modal */}
-      {showQRGenerator && (
-        <QRGenerator
-          url={data.qrCodeId 
-            ? `${baseUrl}/qr/${data.qrCodeId}${urlWithUTM !== fullUrl ? `?${urlWithUTM.split('?')[1]}` : ''}`
-            : (urlWithUTM || fullUrl) // For new QR codes, use direct published URL (includes /published-product/)
-          }
-          qrId={data.qrCodeId || undefined}
-          existingCustomization={data.qrCustomization}
-          onGenerate={handleQRGenerated}
-          onClose={() => setShowQRGenerator(false)}
-        />
-      )}
+      {showQRGenerator && (() => {
+        // Generate URL for QR code
+        const brandSlug = brandName ? getBrandNameSlug(brandName) : 'brand';
+        const destinationUrl = urlWithUTM || fullUrl;
+        const qrType = getQRType(destinationUrl);
+        const qrUrl = data.qrCodeId 
+          ? `${baseUrl}/${brandSlug}/${qrType}/${data.qrCodeId}${urlWithUTM !== fullUrl ? `?${urlWithUTM.split('?')[1]}` : ''}`
+          : `${baseUrl}/${brandSlug}/${qrType}/temp-${Date.now()}${urlWithUTM !== fullUrl ? `?${urlWithUTM.split('?')[1]}` : ''}`;
+        
+        return (
+          <QRGenerator
+            url={qrUrl}
+            qrId={data.qrCodeId || undefined}
+            existingCustomization={data.qrCustomization}
+            onGenerate={handleQRGenerated}
+            onClose={() => setShowQRGenerator(false)}
+          />
+        );
+      })()}
     </div>
   );
 };

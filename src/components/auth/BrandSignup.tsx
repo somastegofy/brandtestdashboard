@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signUpBrand, EmailAlreadyExistsError, PasswordsDoNotMatchError } from '../../api/auth';
+import { signUpBrand, EmailAlreadyExistsError, PasswordsDoNotMatchError, NetworkError } from '../../api/auth';
 
 const BrandSignup: React.FC = () => {
   const navigate = useNavigate();
@@ -57,12 +57,19 @@ const BrandSignup: React.FC = () => {
         navigate('/auth/login');
       }
     } catch (err) {
-      if (err instanceof EmailAlreadyExistsError) {
+      if (err instanceof NetworkError) {
+        setError('Unable to connect to the server. Please check your internet connection and ensure your Supabase project is active. If your project was paused, please reactivate it in the Supabase dashboard.');
+      } else if (err instanceof EmailAlreadyExistsError) {
         setError('Email already exists');
       } else if (err instanceof PasswordsDoNotMatchError) {
         setError('Passwords do not match');
       } else if (err instanceof Error) {
-        setError(err.message || 'Something went wrong during signup.');
+        // Check for network-related error messages
+        if (err.message?.includes('Failed to fetch') || err.message?.includes('ERR_NAME_NOT_RESOLVED') || err.message?.includes('NetworkError')) {
+          setError('Unable to connect to the server. Please check your internet connection and ensure your Supabase project is active. If your project was paused, please reactivate it in the Supabase dashboard.');
+        } else {
+          setError(err.message || 'Something went wrong during signup.');
+        }
       } else {
         setError('Something went wrong during signup.');
       }

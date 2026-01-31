@@ -11,15 +11,30 @@ import { loadStudioPageById } from '../api/studioPages';
  * 1. Looks up the QR code and linked studio page
  * 2. Increments the scan count
  * 3. Redirects to the published landing page
+ * 
+ * Supports URL formats:
+ * - /qr/:qrId (legacy)
+ * - /:brandname/:type/:qrId (new format)
  */
 const QRScanRedirect: React.FC = () => {
-  const { qrId } = useParams<{ qrId: string }>();
+  const { qrId, brandname, type } = useParams<{ 
+    qrId?: string; 
+    brandname?: string; 
+    type?: string;
+  }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
+    // Prevent infinite loops - only run once
+    if (hasRedirected) {
+      return;
+    }
+
     const handleRedirect = async () => {
+      // QR ID is available in both old (/qr/:qrId) and new (/:brandname/:type/:qrId) formats
       if (!qrId) {
         setError('No QR code ID provided');
         setLoading(false);
@@ -28,6 +43,7 @@ const QRScanRedirect: React.FC = () => {
 
       try {
         setLoading(true);
+        setHasRedirected(true); // Mark as redirected to prevent re-running
 
         // 1. First check if linked to a Studio Page (Internal)
         const pageLink = await getPageByQRCodeId(qrId);
@@ -52,13 +68,54 @@ const QRScanRedirect: React.FC = () => {
         const qrData = await loadQRCodeById(qrId);
 
         if (qrData && qrData.url) {
-          // Validate URL to prevent XSS/bad redirects
+          // Validate URL to prevent XSS/bad redirects and infinite loops
           let targetUrl = qrData.url;
-          if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+          
+          // If URL is internal (starts with /), make it absolute
+          if (targetUrl.startsWith('/')) {
+            targetUrl = window.location.origin + targetUrl;
+          } else if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
             targetUrl = 'https://' + targetUrl;
           }
 
-          // External redirect
+          // CRITICAL: Prevent infinite loop - check if target URL matches QR redirect pattern
+          const currentUrl = window.location.href;
+          const targetUrlObj = new URL(targetUrl);
+          const currentUrlObj = new URL(currentUrl);
+          
+          // Check if target URL is a QR redirect URL
+          const pathParts = targetUrlObj.pathname.split('/').filter(Boolean);
+          const isQRRedirectUrl = targetUrlObj.pathname.startsWith('/qr/') || 
+                                  (pathParts.length === 3 && pathParts[2]); // /brandname/type/qrId
+          
+          // Check if it's pointing to THIS specific QR code (actual loop)
+          const isPointingToSelf = isQRRedirectUrl && 
+                                   targetUrlObj.origin === currentUrlObj.origin &&
+                                   (targetUrlObj.pathname === currentUrlObj.pathname || 
+                                    (pathParts.length === 3 && pathParts[2] === qrId));
+          
+          if (isPointingToSelf) {
+            // This QR code is pointing to itself - this is a real loop
+            // This happens when the database has the redirect URL stored instead of destination URL
+            console.error('QR code loop detected - database has redirect URL stored:', {
+              qrId,
+              storedUrl: qrData.url,
+              targetUrl,
+              currentUrl
+            });
+            setError(`QR code configuration error: The stored URL (${qrData.url}) is a redirect URL, not a destination URL. This QR code was likely created before the fix. Please edit this QR code and update the destination URL to the actual target (e.g., https://stegofy.com) instead of the redirect URL.`);
+            setLoading(false);
+            return;
+          }
+          
+          // If it's a QR redirect URL but not pointing to self, it might be an old format
+          // or pointing to another QR code (which is allowed)
+          if (isQRRedirectUrl && targetUrlObj.origin === currentUrlObj.origin) {
+            console.warn('QR code points to another QR redirect URL:', targetUrl);
+            // Still redirect - might be intentional chaining
+          }
+
+          // External redirect using window.location.replace to prevent history issues
           window.location.replace(targetUrl);
           return;
         }
@@ -69,11 +126,12 @@ const QRScanRedirect: React.FC = () => {
         console.error('Error redirecting from QR code:', err);
         setError(err.message || 'Failed to redirect');
         setLoading(false);
+        setHasRedirected(false); // Allow retry on error
       }
     };
 
     handleRedirect();
-  }, [qrId, navigate]);
+  }, [qrId, brandname, type, navigate, hasRedirected]);
 
   if (loading) {
     return (

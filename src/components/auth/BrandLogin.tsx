@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { loginBrand, InvalidUserError, WrongPasswordError } from '../../api/auth';
+import { loginBrand, InvalidUserError, WrongPasswordError, NetworkError } from '../../api/auth';
 
 const BrandLogin: React.FC = () => {
   const navigate = useNavigate();
@@ -42,12 +42,19 @@ const BrandLogin: React.FC = () => {
         navigate('/');
       }
     } catch (err) {
-      if (err instanceof InvalidUserError) {
+      if (err instanceof NetworkError) {
+        setError('Unable to connect to the server. Please check your internet connection and ensure your Supabase project is active. If your project was paused, please reactivate it in the Supabase dashboard.');
+      } else if (err instanceof InvalidUserError) {
         setError('Invalid user');
       } else if (err instanceof WrongPasswordError) {
         setError('Wrong password');
       } else if (err instanceof Error) {
-        setError(err.message || 'Unable to log in. Please try again.');
+        // Check for network-related error messages
+        if (err.message?.includes('Failed to fetch') || err.message?.includes('ERR_NAME_NOT_RESOLVED') || err.message?.includes('NetworkError')) {
+          setError('Unable to connect to the server. Please check your internet connection and ensure your Supabase project is active. If your project was paused, please reactivate it in the Supabase dashboard.');
+        } else {
+          setError(err.message || 'Unable to log in. Please try again.');
+        }
       } else {
         setError('Unable to log in. Please try again.');
       }
